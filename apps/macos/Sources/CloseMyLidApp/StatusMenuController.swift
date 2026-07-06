@@ -7,6 +7,8 @@ final class StatusMenuController: NSObject {
     private let sleepController: SleepSessionController
     private let powerSettingsReader: PowerSettingsReading
     private let launchAtLoginController: LaunchAtLoginController
+    private var panelController: MenuBarPanelController?
+    private var settingsWindowController: SettingsWindowController?
     private var refreshTimer: Timer?
 
     init(
@@ -20,15 +22,23 @@ final class StatusMenuController: NSObject {
         self.launchAtLoginController = launchAtLoginController
         super.init()
 
+        panelController = MenuBarPanelController(
+            sleep: sleepController,
+            actions: MenuPanelActions(
+                setHolding: { [weak self] holding in self?.setHolding(holding) },
+                hold: { [weak self] duration in self?.startSession(duration) },
+                openSettings: { [weak self] in self?.openSettings() },
+                quit: { [weak self] in self?.quit() }
+            )
+        )
+
         configureStatusItem()
         syncSessionState()
-        rebuildMenu()
         scheduleRefreshTimer()
     }
 
     func stopSession() throws {
         try sleepController.stop()
-        rebuildMenu()
     }
 
     private func configureStatusItem() {
@@ -39,67 +49,17 @@ final class StatusMenuController: NSObject {
         button.image = NSImage(systemSymbolName: "laptopcomputer", accessibilityDescription: "Close My Lid")
         button.image?.isTemplate = true
         button.toolTip = "Close My Lid"
+        button.target = self
+        button.action = #selector(togglePanel)
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     private func scheduleRefreshTimer() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.syncSessionState()
-                self?.rebuildMenu()
             }
         }
-    }
-
-    private func rebuildMenu() {
-        let menu = NSMenu()
-
-        let heading = NSMenuItem(title: sleepController.state.statusText(), action: nil, keyEquivalent: "")
-        heading.isEnabled = false
-        menu.addItem(heading)
-        menu.addItem(.separator())
-
-        for duration in SessionDuration.menuPresets {
-            menu.addItem(startSessionItem(for: duration))
-        }
-
-        let stopItem = NSMenuItem(title: "Stop Holding", action: #selector(stopSessionFromMenu), keyEquivalent: "")
-        stopItem.target = self
-        stopItem.isEnabled = sleepController.state.isActive
-        menu.addItem(stopItem)
-
-        menu.addItem(.separator())
-        menu.addItem(openBatterySettingsItem())
-        menu.addItem(launchAtLoginItem())
-        menu.addItem(.separator())
-        menu.addItem(quitItem())
-
-        statusItem.menu = menu
-    }
-
-    private func startSessionItem(for duration: SessionDuration) -> NSMenuItem {
-        let item = NSMenuItem(title: "Start \(duration.title)", action: #selector(startSession(_:)), keyEquivalent: "")
-        item.target = self
-        item.representedObject = duration
-        return item
-    }
-
-    private func openBatterySettingsItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Open Battery Settings", action: #selector(openBatterySettings), keyEquivalent: "")
-        item.target = self
-        return item
-    }
-
-    private func launchAtLoginItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
-        item.target = self
-        item.state = launchAtLoginController.isEnabled ? .on : .off
-        return item
-    }
-
-    private func quitItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Quit Close My Lid", action: #selector(quit), keyEquivalent: "q")
-        item.target = self
-        return item
     }
 
     private func syncSessionState() {
@@ -112,47 +72,43 @@ final class StatusMenuController: NSObject {
         }
     }
 
-    @objc private func startSession(_ sender: NSMenuItem) {
-        guard let duration = sender.representedObject as? SessionDuration else {
+    @objc private func togglePanel() {
+        guard let button = statusItem.button else {
             return
         }
 
+        panelController?.toggle(relativeTo: button)
+    }
+
+    private func setHolding(_ holding: Bool) {
+        do {
+            if holding {
+                try sleepController.start(duration: .indefinitely)
+            } else {
+                try sleepController.stop()
+            }
+        } catch {
+            showError(error)
+        }
+    }
+
+    private func startSession(_ duration: SessionDuration) {
         do {
             try sleepController.start(duration: duration)
         } catch {
             showError(error)
         }
-
-        rebuildMenu()
     }
 
-    @objc private func stopSessionFromMenu() {
-        do {
-            try stopSession()
-        } catch {
-            showError(error)
-        }
-    }
-
-    @objc private func openBatterySettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension") else {
-            return
+    private func openSettings() {
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController(launchAtLogin: launchAtLoginController)
         }
 
-        NSWorkspace.shared.open(url)
+        settingsWindowController?.show()
     }
 
-    @objc private func toggleLaunchAtLogin() {
-        do {
-            try launchAtLoginController.setEnabled(!launchAtLoginController.isEnabled)
-        } catch {
-            showError(error)
-        }
-
-        rebuildMenu()
-    }
-
-    @objc private func quit() {
+    private func quit() {
         try? stopSession()
         NSApp.terminate(nil)
     }
