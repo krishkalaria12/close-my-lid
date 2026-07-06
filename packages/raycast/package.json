@@ -1,0 +1,38 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "close-my-lid",
+  "title": "Close My Lid",
+  "description": "Control Close My Lid sleep sessions from Raycast.",
+  "icon": "extension-icon.png",
+  "author": "krishkalaria12",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "enable",
+      "title": "Start Holding Lid",
+      "description": "Disable closed-lid sleep with administrator approval.",
+      "mode": "no-view"
+    },
+    {
+      "name": "disable",
+      "title": "Stop Holding Lid",
+      "description": "Restore normal closed-lid sleep behavior.",
+      "mode": "no-view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.100.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.0.4",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0"
+  },
+  "scripts": {
+    "dev": "ray develop",
+    "lint": "ray lint",
+    "build": "ray build"
+  }
+}
