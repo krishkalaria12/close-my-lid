@@ -5,9 +5,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuController: StatusMenuController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let powerManager = PmsetPowerManager()
         NSApp.setActivationPolicy(.accessory)
         menuController = StatusMenuController(
-            sleepController: SleepSessionController(executor: PmsetPowerManager())
+            sleepController: SleepSessionController(executor: powerManager),
+            powerSettingsReader: powerManager
         )
     }
 
@@ -88,18 +90,27 @@ exit(CommandLineInterface.run(arguments: Array(CommandLine.arguments.dropFirst()
 final class StatusMenuController: NSObject {
     private let statusItem: NSStatusItem
     private let sleepController: SleepSessionController
+    private let powerSettingsReader: PowerSettingsReading
+    private let launchAtLoginController: LaunchAtLoginController
     private var refreshTimer: Timer?
 
-    init(sleepController: SleepSessionController) {
+    init(
+        sleepController: SleepSessionController,
+        powerSettingsReader: PowerSettingsReading,
+        launchAtLoginController: LaunchAtLoginController = LaunchAtLoginController()
+    ) {
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.sleepController = sleepController
+        self.powerSettingsReader = powerSettingsReader
+        self.launchAtLoginController = launchAtLoginController
         super.init()
 
         configureStatusItem()
+        syncSessionState()
         rebuildMenu()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                try? self?.sleepController.stopIfExpired()
+                self?.syncSessionState()
                 self?.rebuildMenu()
             }
         }
@@ -146,6 +157,11 @@ final class StatusMenuController: NSObject {
         powerSettings.target = self
         menu.addItem(powerSettings)
 
+        let launchAtLogin = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        launchAtLogin.target = self
+        launchAtLogin.state = launchAtLoginController.isEnabled ? .on : .off
+        menu.addItem(launchAtLogin)
+
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit Close My Lid", action: #selector(quit), keyEquivalent: "q")
@@ -153,6 +169,16 @@ final class StatusMenuController: NSObject {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    private func syncSessionState() {
+        do {
+            try sleepController.syncWithSystem(
+                disableSleepIsEnabled: powerSettingsReader.disableSleepIsEnabled()
+            )
+        } catch {
+            try? sleepController.stopIfExpired()
+        }
     }
 
     @objc private func startSession(_ sender: NSMenuItem) {
@@ -183,6 +209,16 @@ final class StatusMenuController: NSObject {
         }
 
         NSWorkspace.shared.open(url)
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            try launchAtLoginController.setEnabled(!launchAtLoginController.isEnabled)
+        } catch {
+            showError(error)
+        }
+
+        rebuildMenu()
     }
 
     @objc private func quit() {

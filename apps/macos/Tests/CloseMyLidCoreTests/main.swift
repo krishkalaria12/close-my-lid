@@ -14,6 +14,10 @@ struct TestRunner {
         testStatusCopyRoundsUpRemainingTime()
         testCommandLineActionParser()
         testPowerSettingsParser()
+        testSessionStateLoadsFromStore()
+        testSessionStatePersistsAfterStartAndStop()
+        testSessionSyncReflectsExternalEnable()
+        testSessionSyncClearsStaleActiveState()
 
         if failures.isEmpty {
             print("All CloseMyLidCore tests passed")
@@ -163,6 +167,87 @@ struct TestRunner {
             !PowerSettingsParser.disableSleepIsEnabled(from: "sleep 1"),
             "pmset parser treats missing disablesleep as disabled"
         )
+    }
+
+    private mutating func testSessionStateLoadsFromStore() {
+        let storedState = SleepControlState.active(
+            startedAt: Date(timeIntervalSince1970: 10),
+            endsAt: Date(timeIntervalSince1970: 70)
+        )
+        let store = InMemorySleepSessionStore(initialState: storedState)
+        let controller = SleepSessionController(
+            executor: RecordingPowerCommandExecutor(),
+            store: store
+        )
+
+        expect(controller.state == storedState, "session controller loads persisted state")
+    }
+
+    private mutating func testSessionStatePersistsAfterStartAndStop() {
+        let executor = RecordingPowerCommandExecutor()
+        let store = InMemorySleepSessionStore()
+        let controller = SleepSessionController(executor: executor, store: store)
+        let now = Date(timeIntervalSince1970: 100)
+
+        do {
+            try controller.start(duration: .timed(60), now: now)
+            try controller.stop()
+        } catch {
+            failures.append("FAILED: persisting session state threw \(error)")
+            return
+        }
+
+        expect(
+            store.savedStates == [
+                .inactive,
+                .active(startedAt: now, endsAt: Date(timeIntervalSince1970: 160)),
+                .inactive
+            ],
+            "session controller persists start and stop state"
+        )
+    }
+
+    private mutating func testSessionSyncReflectsExternalEnable() {
+        let store = InMemorySleepSessionStore()
+        let controller = SleepSessionController(
+            executor: RecordingPowerCommandExecutor(),
+            store: store
+        )
+        let now = Date(timeIntervalSince1970: 200)
+
+        do {
+            try controller.syncWithSystem(disableSleepIsEnabled: true, now: now)
+        } catch {
+            failures.append("FAILED: sync external enable threw \(error)")
+            return
+        }
+
+        expect(
+            controller.state == .active(startedAt: now, endsAt: nil),
+            "session sync reflects externally enabled sleep hold"
+        )
+    }
+
+    private mutating func testSessionSyncClearsStaleActiveState() {
+        let storedState = SleepControlState.active(
+            startedAt: Date(timeIntervalSince1970: 10),
+            endsAt: nil
+        )
+        let store = InMemorySleepSessionStore(initialState: storedState)
+        let controller = SleepSessionController(
+            executor: RecordingPowerCommandExecutor(),
+            store: store
+        )
+
+        do {
+            try controller.syncWithSystem(disableSleepIsEnabled: false)
+        } catch {
+            failures.append("FAILED: sync stale active state threw \(error)")
+            return
+        }
+
+        expect(controller.state == .inactive, "session sync clears stale active state")
+        expect(store.savedStates.last == .inactive, "session sync persists stale state cleanup")
     }
 }
 

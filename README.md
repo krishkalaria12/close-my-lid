@@ -24,6 +24,14 @@ The app lives in the menu bar and offers these session presets:
 
 Closed-lid sleep prevention uses `pmset -a disablesleep`, which requires administrator approval. The app restores normal sleep behavior when a session stops, expires, or the app quits.
 
+The menu also includes:
+
+- current hold status
+- Launch at Login toggle
+- Battery Settings shortcut
+
+Session state is persisted locally so the menu can reconcile itself with the current `pmset` state after relaunches or Raycast-triggered changes.
+
 ## Development
 
 Build and test the Swift package:
