@@ -10,6 +10,7 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 - Raycast commands for starting and stopping the same power behavior.
 - Homebrew formula scaffolding for the first tagged release.
 - CLI commands for scripted package usage: `enable`, `disable`, `status`, `--help`, and `--version`.
+- `.app` bundle packaging with `LSUIElement` so the app presents as a menu bar utility instead of a Dock app.
 
 ## Implementation Notes
 

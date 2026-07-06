@@ -36,6 +36,13 @@ swift run CloseMyLid --help
 swift run CloseMyLid
 ```
 
+Package the menu bar app:
+
+```sh
+./scripts/package-macos-app.sh
+open "dist/macos/Close My Lid.app"
+```
+
 Run the Raycast extension:
 
 ```sh
