@@ -16,8 +16,6 @@ final class MenuBarPanelController: NSObject, NSWindowDelegate {
     private var keyMonitor: Any?
     private weak var statusButton: NSStatusBarButton?
 
-    var isVisible: Bool { panel.isVisible }
-
     init(sleep: SleepSessionController, actions: MenuPanelActions) {
         self.model = MenuPanelModel()
         self.actions = actions
@@ -76,7 +74,7 @@ final class MenuBarPanelController: NSObject, NSWindowDelegate {
         model.refresh()
 
         let size = hostingView.fittingSize
-        var origin = NSPoint(x: 0, y: 0)
+        var origin = NSPoint.zero
 
         if let buttonWindow = button.window {
             let buttonFrame = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
