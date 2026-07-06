@@ -2,18 +2,20 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const pmsetPath = "/usr/bin/pmset";
+const osascriptPath = "/usr/bin/osascript";
 
 export async function setClosedLidHold(enabled: boolean): Promise<void> {
   const value = enabled ? "1" : "0";
 
-  await execFileAsync("/usr/bin/osascript", [
+  await execFileAsync(osascriptPath, [
     "-e",
-    `do shell script "/usr/bin/pmset -a disablesleep ${value}" with administrator privileges`,
+    `do shell script "${pmsetPath} -a disablesleep ${value}" with administrator privileges`,
   ]);
 }
 
 export async function readClosedLidHold(): Promise<boolean> {
-  const { stdout } = await execFileAsync("/usr/bin/pmset", ["-g"]);
+  const { stdout } = await execFileAsync(pmsetPath, ["-g"]);
   return parseClosedLidHold(stdout);
 }
 

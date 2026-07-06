@@ -17,9 +17,14 @@ public enum PowerSettingsParser {
 
 public final class PmsetPowerManager: PowerCommandExecuting, PowerSettingsReading {
     private let adminExecutor: AdminShellPowerCommandExecutor
+    private let commandRunner: ShellCommandRunner
 
-    public init(adminExecutor: AdminShellPowerCommandExecutor = AdminShellPowerCommandExecutor()) {
+    public init(
+        adminExecutor: AdminShellPowerCommandExecutor = AdminShellPowerCommandExecutor(),
+        commandRunner: ShellCommandRunner = ShellCommandRunner()
+    ) {
         self.adminExecutor = adminExecutor
+        self.commandRunner = commandRunner
     }
 
     public func setDisableSleep(_ enabled: Bool) throws {
@@ -27,27 +32,15 @@ public final class PmsetPowerManager: PowerCommandExecuting, PowerSettingsReadin
     }
 
     public func disableSleepIsEnabled() throws -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
-        process.arguments = ["-g"]
+        let result = try commandRunner.run(
+            executablePath: "/usr/bin/pmset",
+            arguments: ["-g"]
+        )
 
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let output = String(
-            data: outputPipe.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8
-        )?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        guard process.terminationStatus == 0 else {
-            throw PowerCommandError.commandFailed(status: process.terminationStatus, output: output)
+        guard result.status == 0 else {
+            throw PowerCommandError.commandFailed(status: result.status, output: result.output)
         }
 
-        return PowerSettingsParser.disableSleepIsEnabled(from: output)
+        return PowerSettingsParser.disableSleepIsEnabled(from: result.output)
     }
 }

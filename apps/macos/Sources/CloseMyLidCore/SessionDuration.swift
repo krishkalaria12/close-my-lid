@@ -4,10 +4,14 @@ public enum SessionDuration: Equatable, Sendable {
     case indefinitely
     case timed(TimeInterval)
 
+    public static let thirtyMinutes: TimeInterval = 30.0 * 60.0
+    public static let oneHour: TimeInterval = 60.0 * 60.0
+    public static let fourHours: TimeInterval = 4.0 * 60.0 * 60.0
+
     public static let menuPresets: [SessionDuration] = [
-        .timed(30 * 60),
-        .timed(60 * 60),
-        .timed(4 * 60 * 60),
+        .timed(thirtyMinutes),
+        .timed(oneHour),
+        .timed(fourHours),
         .indefinitely
     ]
 
@@ -15,11 +19,11 @@ public enum SessionDuration: Equatable, Sendable {
         switch self {
         case .indefinitely:
             return "Indefinitely"
-        case .timed(30 * 60):
+        case .timed(Self.thirtyMinutes):
             return "30 Minutes"
-        case .timed(60 * 60):
+        case .timed(Self.oneHour):
             return "1 Hour"
-        case .timed(4 * 60 * 60):
+        case .timed(Self.fourHours):
             return "4 Hours"
         case let .timed(seconds):
             return "\(Int(seconds / 60)) Minutes"

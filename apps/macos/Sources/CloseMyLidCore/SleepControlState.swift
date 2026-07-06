@@ -5,10 +5,12 @@ public enum SleepControlState: Equatable, Sendable {
     case active(startedAt: Date, endsAt: Date?)
 
     public var isActive: Bool {
-        if case .active = self {
+        switch self {
+        case .active:
             return true
+        case .inactive:
+            return false
         }
-        return false
     }
 
     public func statusText(now: Date = Date()) -> String {

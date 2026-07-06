@@ -16,31 +16,23 @@ public enum PowerCommandError: Error, Equatable, LocalizedError {
 }
 
 public final class AdminShellPowerCommandExecutor: PowerCommandExecuting {
-    public init() {}
+    private let commandRunner: ShellCommandRunner
+
+    public init(commandRunner: ShellCommandRunner = ShellCommandRunner()) {
+        self.commandRunner = commandRunner
+    }
 
     public func setDisableSleep(_ enabled: Bool) throws {
         let value = enabled ? "1" : "0"
         let script = #"do shell script "/usr/bin/pmset -a disablesleep \#(value)" with administrator privileges"#
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
+        let result = try commandRunner.run(
+            executablePath: "/usr/bin/osascript",
+            arguments: ["-e", script]
+        )
 
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let output = String(
-            data: outputPipe.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8
-        )?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        guard process.terminationStatus == 0 else {
-            throw PowerCommandError.commandFailed(status: process.terminationStatus, output: output)
+        guard result.status == 0 else {
+            throw PowerCommandError.commandFailed(status: result.status, output: result.output)
         }
     }
 }

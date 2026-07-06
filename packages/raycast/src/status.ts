@@ -3,7 +3,8 @@ import { readClosedLidHold } from "./power";
 
 export default async function command() {
   const enabled = await readClosedLidHold();
-  await showHUD(
-    enabled ? "Closed-lid hold is enabled" : "Closed-lid hold is disabled",
-  );
+  const message = enabled
+    ? "Closed-lid hold is enabled"
+    : "Closed-lid hold is disabled";
+  await showHUD(message);
 }

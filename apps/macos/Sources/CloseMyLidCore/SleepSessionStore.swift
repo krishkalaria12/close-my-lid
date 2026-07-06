@@ -59,22 +59,25 @@ public final class InMemorySleepSessionStore: SleepSessionStoring, @unchecked Se
 }
 
 private struct SleepSessionSnapshot: Codable {
-    let startedAt: Date
+    let isActive: Bool
+    let startedAt: Date?
     let endsAt: Date?
 
     init(state: SleepControlState) {
         switch state {
         case .inactive:
-            startedAt = Date(timeIntervalSince1970: 0)
+            isActive = false
+            startedAt = nil
             endsAt = Date(timeIntervalSince1970: 0)
         case let .active(startedAt, endsAt):
+            isActive = true
             self.startedAt = startedAt
             self.endsAt = endsAt
         }
     }
 
     var state: SleepControlState {
-        guard startedAt != Date(timeIntervalSince1970: 0) else {
+        guard isActive, let startedAt else {
             return .inactive
         }
 

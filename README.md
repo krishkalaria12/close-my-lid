@@ -1,38 +1,83 @@
 # Close My Lid
 
-Close My Lid is a macOS menu bar app for keeping a Mac awake while coding agents, builds, downloads, and other long-running work continue after the lid is closed.
+Close My Lid keeps a Mac awake while coding agents, builds, downloads, and other long-running work continue after the laptop lid is closed.
 
-The project is organized as a small monorepo so the native app, Raycast extension, Homebrew formula, and future website can share the same product direction.
+It ships as a native macOS menu bar app, a `close-my-lid` CLI, a Raycast extension, and Homebrew formula/cask packages.
 
-## Workspace
+## Install
 
-```text
-apps/macos/        Native macOS menu bar app and Swift tests
-packages/raycast/  Raycast extension scaffold
-Formula/           Homebrew formula scaffold
-docs/              Product and implementation notes
+Tap the repository once:
+
+```sh
+brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
 ```
+
+Install the menu bar app:
+
+```sh
+brew install --cask krishkalaria12/close-my-lid/close-my-lid
+```
+
+Install the CLI:
+
+```sh
+brew install krishkalaria12/close-my-lid/close-my-lid
+```
+
+The GitHub release also includes a zipped `.app` bundle:
+
+- [Close My Lid v0.1.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.1.0)
+
+## Features
+
+- Menu bar controls for 30 minute, 1 hour, 4 hour, and indefinite sessions
+- Admin-approved closed-lid sleep hold using `pmset -a disablesleep`
+- Automatic cleanup when a timed session expires or the app quits
+- Launch at Login toggle
+- Battery Settings shortcut
+- Local session persistence and live `pmset` reconciliation
+- Raycast commands for enable, disable, and status
+- CLI commands for scripts and package managers
 
 ## macOS App
 
-The app lives in the menu bar and offers these session presets:
+Run the app from `/Applications` after installing the cask. The menu shows the current hold status, session presets, Launch at Login, Battery Settings, and Quit.
 
-- 30 minutes
-- 1 hour
-- 4 hours
-- Indefinitely
+Closed-lid sleep prevention requires administrator approval. Close My Lid restores normal sleep behavior when a session stops, expires, or the app quits.
 
-Closed-lid sleep prevention uses `pmset -a disablesleep`, which requires administrator approval. The app restores normal sleep behavior when a session stops, expires, or the app quits.
+## CLI
 
-The menu also includes:
+```sh
+close-my-lid --help
+close-my-lid status
+close-my-lid enable
+close-my-lid disable
+```
 
-- current hold status
-- Launch at Login toggle
-- Battery Settings shortcut
+Running `close-my-lid` with no arguments launches the menu bar app.
 
-Session state is persisted locally so the menu can reconcile itself with the current `pmset` state after relaunches or Raycast-triggered changes.
+## Raycast
+
+The Raycast extension lives in `packages/raycast` and exposes:
+
+- Start Holding Lid
+- Stop Holding Lid
+- Check Lid Hold Status
+
+It uses the same `pmset` behavior as the native app and is restricted to macOS in the manifest.
 
 ## Development
+
+The project is organized as a small monorepo so the native app, Raycast extension, Homebrew packages, and future website can share one product direction.
+
+```text
+apps/macos/        Native macOS menu bar app, CLI, and Swift tests
+packages/raycast/  Raycast extension
+Formula/           Homebrew formula for the CLI
+Casks/             Homebrew cask for the app bundle
+docs/              Product and implementation notes
+scripts/           Release and packaging helpers
+```
 
 Build and test the Swift package:
 
@@ -59,31 +104,11 @@ npm install
 npm run dev
 ```
 
-The Raycast package exposes commands to enable, disable, and check the closed-lid hold. It uses the same `pmset` behavior as the native app and is restricted to macOS in the manifest.
-
 ## Packaging
 
-Install from Homebrew:
-
-```sh
-brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
-brew install --cask krishkalaria12/close-my-lid/close-my-lid
-brew install krishkalaria12/close-my-lid/close-my-lid
-```
-
-Use the cask for the menu bar app and the formula for the `close-my-lid` CLI.
-
-The installed `close-my-lid` binary can launch the menu bar app or run package-friendly commands:
-
-```sh
-close-my-lid --help
-close-my-lid status
-close-my-lid enable
-close-my-lid disable
-```
-
 The formula builds from the `v0.1.0` source tag.
+The cask installs the released `Close-My-Lid-v0.1.0-macOS.zip` app artifact.
 
 ## Safety
 
-Keeping a Mac awake in a bag can create heat and battery risk. The default app surface favors timed sessions so the machine returns to normal sleep behavior automatically.
+Keeping a Mac awake in a bag can create heat and battery risk. Prefer timed sessions when possible so the machine returns to normal sleep behavior automatically.

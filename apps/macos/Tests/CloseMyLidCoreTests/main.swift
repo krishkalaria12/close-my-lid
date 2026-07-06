@@ -107,9 +107,9 @@ struct TestRunner {
     private mutating func testMenuPresetsMatchProductDefaults() {
         expect(
             SessionDuration.menuPresets == [
-                .timed(30.0 * 60.0),
-                .timed(60.0 * 60.0),
-                .timed(4.0 * 60.0 * 60.0),
+                .timed(SessionDuration.thirtyMinutes),
+                .timed(SessionDuration.oneHour),
+                .timed(SessionDuration.fourHours),
                 .indefinitely
             ],
             "menu presets match product defaults"
