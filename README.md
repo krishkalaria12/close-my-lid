@@ -67,8 +67,11 @@ Install from Homebrew:
 
 ```sh
 brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
+brew install --cask krishkalaria12/close-my-lid/close-my-lid
 brew install krishkalaria12/close-my-lid/close-my-lid
 ```
+
+Use the cask for the menu bar app and the formula for the `close-my-lid` CLI.
 
 The installed `close-my-lid` binary can launch the menu bar app or run package-friendly commands:
 
