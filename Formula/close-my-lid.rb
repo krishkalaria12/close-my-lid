@@ -6,7 +6,6 @@ class CloseMyLid < Formula
   sha256 "23f891d7c0d6d2b733387692fae73102cc98eac31d6a4ca8467f4275db2b7057"
   license "MIT"
 
-  depends_on xcode: ["16.0", :build]
   depends_on macos: :sonoma
 
   def install
