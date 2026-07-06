@@ -37,7 +37,11 @@ jobs:
           npx tsc --noEmit
 
       - name: Validate Homebrew formula
-        run: ruby -c Formula/close-my-lid.rb
+        run: |
+          ruby -c Formula/close-my-lid.rb
+          ruby -c Casks/close-my-lid.rb
+          brew style Formula/close-my-lid.rb
+          brew style Casks/close-my-lid.rb
 
       - name: Package macOS app
         run: |
