@@ -32,6 +32,7 @@ Build and test the Swift package:
 cd apps/macos
 swift run CloseMyLidCoreTests
 swift build
+swift run CloseMyLid --help
 swift run CloseMyLid
 ```
 
@@ -43,9 +44,20 @@ npm install
 npm run dev
 ```
 
+The Raycast package exposes commands to enable, disable, and check the closed-lid hold. It uses the same `pmset` behavior as the native app and is restricted to macOS in the manifest.
+
 ## Packaging
 
 The Homebrew formula in `Formula/close-my-lid.rb` is ready to wire up after the first tagged release. Replace the placeholder SHA256 after publishing `v0.1.0`.
+
+The installed `close-my-lid` binary can launch the menu bar app or run package-friendly commands:
+
+```sh
+close-my-lid --help
+close-my-lid status
+close-my-lid enable
+close-my-lid disable
+```
 
 ## Safety
 

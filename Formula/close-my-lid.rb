@@ -19,6 +19,6 @@ class CloseMyLid < Formula
   end
 
   test do
-    assert_predicate bin/"close-my-lid", :exist?
+    assert_match "Close My Lid #{version}", shell_output("#{bin}/close-my-lid --version")
   end
 end

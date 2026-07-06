@@ -9,6 +9,7 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 - Automatic cleanup when a timed session expires or the app quits.
 - Raycast commands for starting and stopping the same power behavior.
 - Homebrew formula scaffolding for the first tagged release.
+- CLI commands for scripted package usage: `enable`, `disable`, `status`, `--help`, and `--version`.
 
 ## Implementation Notes
 

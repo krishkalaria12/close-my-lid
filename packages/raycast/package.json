@@ -4,8 +4,11 @@
   "title": "Close My Lid",
   "description": "Control Close My Lid sleep sessions from Raycast.",
   "icon": "extension-icon.png",
-  "author": "krishkalaria12",
+  "author": "krish",
   "license": "MIT",
+  "platforms": ["macOS"],
+  "categories": ["Developer Tools", "Productivity"],
+  "keywords": ["mac", "sleep", "lid", "clamshell", "agents"],
   "commands": [
     {
       "name": "enable",
@@ -17,6 +20,12 @@
       "name": "disable",
       "title": "Stop Holding Lid",
       "description": "Restore normal closed-lid sleep behavior.",
+      "mode": "no-view"
+    },
+    {
+      "name": "status",
+      "title": "Check Lid Hold Status",
+      "description": "Show whether closed-lid sleep is currently disabled.",
       "mode": "no-view"
     }
   ],

@@ -12,6 +12,8 @@ struct TestRunner {
         testActiveTimedSessionsAreLeftAloneBeforeExpiry()
         testMenuPresetsMatchProductDefaults()
         testStatusCopyRoundsUpRemainingTime()
+        testCommandLineActionParser()
+        testPowerSettingsParser()
 
         if failures.isEmpty {
             print("All CloseMyLidCore tests passed")
@@ -123,6 +125,43 @@ struct TestRunner {
         expect(
             state.statusText(now: Date(timeIntervalSince1970: 2)) == "Holding for 1m",
             "status copy rounds sub-minute"
+        )
+    }
+
+    private mutating func testCommandLineActionParser() {
+        expect(CommandLineActionParser.parse([]) == .launchMenu, "empty CLI arguments launch the menu app")
+        expect(CommandLineActionParser.parse(["enable"]) == .enable, "enable CLI command parses")
+        expect(CommandLineActionParser.parse(["stop"]) == .disable, "stop CLI alias parses")
+        expect(CommandLineActionParser.parse(["--status"]) == .status, "status CLI flag parses")
+        expect(CommandLineActionParser.parse(["wat"]) == nil, "unknown CLI command fails parsing")
+    }
+
+    private mutating func testPowerSettingsParser() {
+        let enabledOutput = """
+        System-wide power settings:
+        Currently in use:
+         sleep                1
+         disablesleep         1
+        """
+
+        let disabledOutput = """
+        System-wide power settings:
+        Currently in use:
+         sleep                1
+         disablesleep         0
+        """
+
+        expect(
+            PowerSettingsParser.disableSleepIsEnabled(from: enabledOutput),
+            "pmset parser treats disablesleep 1 as enabled"
+        )
+        expect(
+            !PowerSettingsParser.disableSleepIsEnabled(from: disabledOutput),
+            "pmset parser treats disablesleep 0 as disabled"
+        )
+        expect(
+            !PowerSettingsParser.disableSleepIsEnabled(from: "sleep 1"),
+            "pmset parser treats missing disablesleep as disabled"
         )
     }
 }
