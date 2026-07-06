@@ -63,7 +63,12 @@ The Raycast package exposes commands to enable, disable, and check the closed-li
 
 ## Packaging
 
-The Homebrew formula in `Formula/close-my-lid.rb` is ready to wire up after the first tagged release. Replace the placeholder SHA256 after publishing `v0.1.0`.
+Install from Homebrew:
+
+```sh
+brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
+brew install krishkalaria12/close-my-lid/close-my-lid
+```
 
 The installed `close-my-lid` binary can launch the menu bar app or run package-friendly commands:
 
@@ -73,6 +78,8 @@ close-my-lid status
 close-my-lid enable
 close-my-lid disable
 ```
+
+The formula builds from the `v0.1.0` source tag.
 
 ## Safety
 
