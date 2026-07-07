@@ -69,11 +69,14 @@ final class SessionNotificationScheduler: SessionNotifying {
         title: String,
         body: String
     ) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-
-        center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+        center.add(
+            notificationRequest(
+                identifier: identifier,
+                title: title,
+                body: body,
+                trigger: nil
+            )
+        )
     }
 
     private func schedule(
@@ -86,11 +89,27 @@ final class SessionNotificationScheduler: SessionNotifying {
             return
         }
 
-        let content = UNMutableNotificationContent()
-        content.title = notification.title
-        content.body = notification.body
-
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-        center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
+        center.add(
+            notificationRequest(
+                identifier: identifier,
+                title: notification.title,
+                body: notification.body,
+                trigger: trigger
+            )
+        )
+    }
+
+    private func notificationRequest(
+        identifier: String,
+        title: String,
+        body: String,
+        trigger: UNNotificationTrigger?
+    ) -> UNNotificationRequest {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+
+        return UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
     }
 }

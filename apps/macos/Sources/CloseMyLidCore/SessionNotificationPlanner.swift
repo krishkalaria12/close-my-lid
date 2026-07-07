@@ -45,13 +45,7 @@ public enum SessionNotificationPlanner {
     public static let endingSoonLeadTime: TimeInterval = 5 * 60
 
     public static func plan(duration: SessionDuration, startedAt: Date) -> SessionNotificationPlan {
-        let startBody: String
-        switch duration {
-        case .indefinitely:
-            startBody = "Your Mac will stay awake with the lid closed until you stop it."
-        case .timed:
-            startBody = "Your Mac will stay awake with the lid closed for the next \(duration.title.lowercased())."
-        }
+        let startBody = startBody(for: duration)
 
         guard let endsAt = duration.endDate(startingAt: startedAt) else {
             return SessionNotificationPlan(
@@ -62,28 +56,42 @@ public enum SessionNotificationPlanner {
             )
         }
 
-        let ended = ScheduledNotification(
-            fireDate: endsAt,
-            title: title,
-            body: "Your Mac now sleeps normally when the lid is closed."
-        )
-
-        // Only warn when the session is long enough that the warning lands
-        // after it starts; otherwise the "started" and warning would collide.
-        let endingSoonFire = endsAt.addingTimeInterval(-endingSoonLeadTime)
-        let endingSoon: ScheduledNotification? = endingSoonFire > startedAt
-            ? ScheduledNotification(
-                fireDate: endingSoonFire,
-                title: title,
-                body: "About 5 minutes left before your Mac sleeps normally with the lid closed."
-            )
-            : nil
-
         return SessionNotificationPlan(
             startTitle: title,
             startBody: startBody,
-            endingSoon: endingSoon,
-            ended: ended
+            endingSoon: endingSoonNotification(startedAt: startedAt, endsAt: endsAt),
+            ended: endedNotification(endsAt: endsAt)
+        )
+    }
+
+    private static func startBody(for duration: SessionDuration) -> String {
+        switch duration {
+        case .indefinitely:
+            return "Your Mac will stay awake with the lid closed until you stop it."
+        case .timed:
+            return "Your Mac will stay awake with the lid closed for the next \(duration.title.lowercased())."
+        }
+    }
+
+    private static func endingSoonNotification(startedAt: Date, endsAt: Date) -> ScheduledNotification? {
+        let fireDate = endsAt.addingTimeInterval(-endingSoonLeadTime)
+
+        guard fireDate > startedAt else {
+            return nil
+        }
+
+        return ScheduledNotification(
+            fireDate: fireDate,
+            title: title,
+            body: "About 5 minutes left before your Mac sleeps normally with the lid closed."
+        )
+    }
+
+    private static func endedNotification(endsAt: Date) -> ScheduledNotification {
+        ScheduledNotification(
+            fireDate: endsAt,
+            title: title,
+            body: "Your Mac now sleeps normally when the lid is closed."
         )
     }
 }
