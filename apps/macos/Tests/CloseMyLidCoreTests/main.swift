@@ -18,6 +18,12 @@ struct TestRunner {
         testSessionStatePersistsAfterStartAndStop()
         testSessionSyncReflectsExternalEnable()
         testSessionSyncClearsStaleActiveState()
+        testBatterySafetyPolicyDefaults()
+        testBatterySafetyPolicyIgnoresChargingMac()
+        testLowBatteryReleasesActiveHold()
+        testLowBatteryLeavesChargingHoldAlone()
+        testHealthyBatteryLeavesHoldAlone()
+        testLowBatteryIgnoresInactiveController()
 
         if failures.isEmpty {
             print("All CloseMyLidCore tests passed")
@@ -226,6 +232,101 @@ struct TestRunner {
             controller.state == .active(startedAt: now, endsAt: nil),
             "session sync reflects externally enabled sleep hold"
         )
+    }
+
+    private mutating func testBatterySafetyPolicyDefaults() {
+        let policy = BatterySafetyPolicy()
+        expect(policy.threshold == 15, "battery safety threshold defaults to 15 percent")
+        expect(
+            policy.shouldReleaseHold(percentage: 15, isCharging: false),
+            "battery at the threshold releases the hold"
+        )
+        expect(
+            policy.shouldReleaseHold(percentage: 5, isCharging: false),
+            "battery below the threshold releases the hold"
+        )
+        expect(
+            !policy.shouldReleaseHold(percentage: 16, isCharging: false),
+            "battery above the threshold keeps the hold"
+        )
+    }
+
+    private mutating func testBatterySafetyPolicyIgnoresChargingMac() {
+        let policy = BatterySafetyPolicy(threshold: 20)
+        expect(
+            !policy.shouldReleaseHold(percentage: 3, isCharging: true),
+            "a charging Mac keeps the hold even on low battery"
+        )
+    }
+
+    private mutating func testLowBatteryReleasesActiveHold() {
+        let executor = RecordingPowerCommandExecutor()
+        let controller = SleepSessionController(executor: executor)
+        let now = Date(timeIntervalSince1970: 100)
+
+        do {
+            try controller.start(duration: .indefinitely, now: now)
+            let released = try controller.stopIfBatteryLow(percentage: 10, isCharging: false)
+            expect(released, "a low battery reports that it released the hold")
+        } catch {
+            failures.append("FAILED: low battery release threw \(error)")
+            return
+        }
+
+        expect(executor.commands == [true, false], "a low battery restores normal sleep")
+        expect(controller.state == .inactive, "a low battery makes the controller inactive")
+    }
+
+    private mutating func testLowBatteryLeavesChargingHoldAlone() {
+        let executor = RecordingPowerCommandExecutor()
+        let controller = SleepSessionController(executor: executor)
+        let now = Date(timeIntervalSince1970: 100)
+
+        do {
+            try controller.start(duration: .indefinitely, now: now)
+            let released = try controller.stopIfBatteryLow(percentage: 5, isCharging: true)
+            expect(!released, "a charging Mac does not release the hold")
+        } catch {
+            failures.append("FAILED: charging low battery flow threw \(error)")
+            return
+        }
+
+        expect(executor.commands == [true], "a charging Mac leaves sleep disabled")
+        expect(controller.state.isActive, "a charging Mac keeps the hold active")
+    }
+
+    private mutating func testHealthyBatteryLeavesHoldAlone() {
+        let executor = RecordingPowerCommandExecutor()
+        let controller = SleepSessionController(executor: executor)
+        let now = Date(timeIntervalSince1970: 100)
+
+        do {
+            try controller.start(duration: .indefinitely, now: now)
+            let released = try controller.stopIfBatteryLow(percentage: 80, isCharging: false)
+            expect(!released, "a healthy battery does not release the hold")
+        } catch {
+            failures.append("FAILED: healthy battery flow threw \(error)")
+            return
+        }
+
+        expect(executor.commands == [true], "a healthy battery leaves sleep disabled")
+        expect(controller.state.isActive, "a healthy battery keeps the hold active")
+    }
+
+    private mutating func testLowBatteryIgnoresInactiveController() {
+        let executor = RecordingPowerCommandExecutor()
+        let controller = SleepSessionController(executor: executor)
+
+        do {
+            let released = try controller.stopIfBatteryLow(percentage: 2, isCharging: false)
+            expect(!released, "an inactive controller has no hold to release")
+        } catch {
+            failures.append("FAILED: inactive low battery flow threw \(error)")
+            return
+        }
+
+        expect(executor.commands.isEmpty, "an inactive controller issues no power commands")
+        expect(controller.state == .inactive, "an inactive controller stays inactive")
     }
 
     private mutating func testSessionSyncClearsStaleActiveState() {

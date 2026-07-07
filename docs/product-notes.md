@@ -7,6 +7,7 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 - Native macOS menu bar app.
 - One-click sleep hold sessions: 30 minutes, 1 hour, 4 hours, and indefinite.
 - Automatic cleanup when a timed session expires or the app quits.
+- Low-battery safety release: an active hold is stopped and normal sleep restored when the battery drops to 15% (`BatterySafetyPolicy.defaultThreshold`) on battery power. Charging Macs are left alone. Enforced on the same 30 second reconciliation timer as `pmset` state.
 - Raycast commands for starting and stopping the same power behavior.
 - Homebrew formula scaffolding for the first tagged release.
 - `v0.1.0` source tag and Homebrew SHA256 are wired into `Formula/close-my-lid.rb`.

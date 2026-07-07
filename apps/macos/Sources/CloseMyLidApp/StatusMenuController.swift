@@ -70,6 +70,19 @@ final class StatusMenuController: NSObject {
         } catch {
             try? sleepController.stopIfExpired()
         }
+
+        enforceBatterySafety()
+    }
+
+    private func enforceBatterySafety() {
+        guard let battery = BatteryStatusReader.read() else {
+            return
+        }
+
+        try? sleepController.stopIfBatteryLow(
+            percentage: battery.percentage,
+            isCharging: battery.isCharging
+        )
     }
 
     @objc private func togglePanel() {
