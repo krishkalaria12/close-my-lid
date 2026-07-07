@@ -23,6 +23,12 @@ struct TestRunner {
         testNotificationPlanForTimedSession()
         testNotificationPlanOmitsEndingSoonForShortSession()
         testNotificationPlanOmitsEndingSoonAtLeadTimeBoundary()
+        testAgentSessionsCountNativeBinaries()
+        testAgentSessionsCountScriptRuntimeInstalls()
+        testAgentSessionsDetectPackagePathWithoutBinaryBasename()
+        testAgentSessionsIgnoreUnrelatedProcesses()
+        testAgentSessionsSkipSameHarnessChildren()
+        testAgentSessionsCountNestedDifferentHarnesses()
 
         if failures.isEmpty {
             print("All CloseMyLidCore tests passed")
@@ -336,6 +342,110 @@ struct TestRunner {
         expect(
             plan.ended?.fireDate == Date(timeIntervalSince1970: 400),
             "lead-time-length sessions still schedule an end notification"
+        )
+    }
+
+    private mutating func testAgentSessionsCountNativeBinaries() {
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(id: 100, parentID: 1, executableName: "claude"),
+            RunningProcess(id: 101, parentID: 2, executableName: "claude"),
+            RunningProcess(id: 102, parentID: 1, executableName: "codex"),
+            RunningProcess(id: 103, parentID: 1, executableName: "opencode"),
+            RunningProcess(id: 104, parentID: 1, executableName: "zsh")
+        ])
+
+        expect(
+            counts == [.claudeCode: 2, .codex: 1, .openCode: 1],
+            "native harness binaries are counted one session per process"
+        )
+    }
+
+    private mutating func testAgentSessionsCountScriptRuntimeInstalls() {
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(
+                id: 200,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js"]
+            ),
+            RunningProcess(
+                id: 201,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "--no-warnings", "/repo/node_modules/.bin/claude"]
+            ),
+            RunningProcess(
+                id: 202,
+                parentID: 1,
+                executableName: "bun",
+                arguments: ["bun", "/opt/homebrew/lib/node_modules/opencode-ai/bin/opencode"]
+            )
+        ])
+
+        expect(
+            counts == [.claudeCode: 2, .openCode: 1],
+            "npm installs running under a JavaScript runtime are detected from arguments"
+        )
+    }
+
+    private mutating func testAgentSessionsDetectPackagePathWithoutBinaryBasename() {
+        // The script path's basename ("codex.js") is not a harness name, so this
+        // exercises the scriptPathMarker branch on its own, with no native child
+        // to supply the count in its place.
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(
+                id: 600,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "/usr/local/lib/node_modules/@openai/codex/bin/codex.js"]
+            )
+        ])
+
+        expect(
+            counts == [.codex: 1],
+            "an npm install matched only by its package-path marker is counted"
+        )
+    }
+
+    private mutating func testAgentSessionsIgnoreUnrelatedProcesses() {
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(id: 300, parentID: 1, executableName: "zsh"),
+            RunningProcess(id: 301, parentID: 1, executableName: "node", arguments: ["node", "/srv/claude-dashboard/server.js"]),
+            RunningProcess(id: 302, parentID: 1, executableName: "node")
+        ])
+
+        expect(counts.isEmpty, "unrelated processes do not produce agent sessions")
+    }
+
+    private mutating func testAgentSessionsSkipSameHarnessChildren() {
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(
+                id: 400,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "/usr/local/lib/node_modules/@openai/codex/bin/codex.js"]
+            ),
+            RunningProcess(id: 401, parentID: 400, executableName: "codex"),
+            RunningProcess(id: 402, parentID: 1, executableName: "opencode"),
+            RunningProcess(id: 403, parentID: 402, executableName: "sh"),
+            RunningProcess(id: 404, parentID: 403, executableName: "opencode")
+        ])
+
+        expect(
+            counts == [.codex: 1, .openCode: 1],
+            "helper children of the same harness are not counted as extra sessions"
+        )
+    }
+
+    private mutating func testAgentSessionsCountNestedDifferentHarnesses() {
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(id: 500, parentID: 1, executableName: "claude"),
+            RunningProcess(id: 501, parentID: 500, executableName: "codex")
+        ])
+
+        expect(
+            counts == [.claudeCode: 1, .codex: 1],
+            "a harness launched inside another harness still counts as a session"
         )
     }
 }

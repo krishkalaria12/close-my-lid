@@ -12,27 +12,45 @@ struct MenuPanelActions {
 @MainActor
 final class MenuPanelModel: ObservableObject {
     @Published var battery: BatteryStatus?
+    @Published var agentSessions: [AgentHarness: Int] = [:]
 
     func refresh() {
-        battery = BatteryStatusReader.read()
+        let currentBattery = BatteryStatusReader.read()
+        if battery != currentBattery {
+            battery = currentBattery
+        }
+
+        // The process-table scan runs off the main thread; only the resulting
+        // Sendable counts hop back to the main actor to update the UI.
+        Task.detached(priority: .utility) { [weak self] in
+            let counts = AgentSessionDetector.sessionCounts()
+            await self?.applyAgentSessions(counts)
+        }
+    }
+
+    private func applyAgentSessions(_ counts: [AgentHarness: Int]) {
+        if agentSessions != counts {
+            agentSessions = counts
+        }
     }
 }
 
 struct AgentActivity: Identifiable {
-    let name: String
-    let detail: String
-    let isWorking: Bool
-    let icon: AgentIcon
+    let harness: AgentHarness
+    let sessionCount: Int
 
-    var id: String { name }
+    var id: AgentHarness { harness }
+    var name: String { harness.displayName }
+    var isWorking: Bool { sessionCount > 0 }
+
+    var detail: String {
+        switch sessionCount {
+        case 0: "idle"
+        case 1: "1 session"
+        default: "\(sessionCount) sessions"
+        }
+    }
 }
-
-// Hardcoded for now; will be backed by real agent detection later.
-private let agents: [AgentActivity] = [
-    AgentActivity(name: "Claude Code", detail: "1 session", isWorking: true, icon: .claude),
-    AgentActivity(name: "OpenAI Codex CLI", detail: "idle", isWorking: false, icon: .codex),
-    AgentActivity(name: "OpenCode", detail: "idle", isWorking: false, icon: .opencode)
-]
 
 struct MenuPanelView: View {
     @ObservedObject var sleep: SleepSessionController
@@ -162,13 +180,22 @@ struct MenuPanelView: View {
 
     // MARK: - Agents
 
+    private var agents: [AgentActivity] {
+        AgentHarness.allCases.map {
+            AgentActivity(harness: $0, sessionCount: model.agentSessions[$0] ?? 0)
+        }
+    }
+
     private var agentsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let agents = self.agents
+        let workingCount = agents.filter(\.isWorking).count
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Agents")
                     .font(.system(size: 15, weight: .bold))
                 Spacer()
-                Text(workingSummary)
+                Text(workingCount == 0 ? "all idle" : "\(workingCount) working")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
@@ -181,17 +208,12 @@ struct MenuPanelView: View {
         }
     }
 
-    private var workingSummary: String {
-        let count = agents.filter(\.isWorking).count
-        return count == 0 ? "all idle" : "\(count) working"
-    }
-
     private func agentRow(_ agent: AgentActivity) -> some View {
         HStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(agent.icon.badgeColor)
-                if let image = agent.icon.image {
+                    .fill(agent.harness.badgeColor)
+                if let image = agent.harness.icon {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
