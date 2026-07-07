@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PACKAGE_DIR="$ROOT_DIR/apps/macos"
 CONFIGURATION="${CONFIGURATION:-release}"
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-0.2.0}"
 APP_NAME="Close My Lid"
 EXECUTABLE_NAME="CloseMyLid"
 BUNDLE_ID="app.closemylid.CloseMyLid"

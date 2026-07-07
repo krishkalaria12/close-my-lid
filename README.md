@@ -28,7 +28,7 @@ The cask installs `Close My Lid.app` into `/Applications`. The formula installs 
 
 The GitHub release also includes a zipped `.app` bundle:
 
-- [Close My Lid v0.1.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.1.0)
+- [Close My Lid v0.2.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.2.0)
 
 ## Features
 
@@ -115,8 +115,8 @@ npm run dev
 
 ## Packaging
 
-The formula builds from the `v0.1.0` source tag.
-The cask installs the released `Close-My-Lid-v0.1.0-macOS.zip` app artifact.
+The formula builds from the `v0.2.0` source tag.
+The cask installs the released `Close-My-Lid-v0.2.0-macOS.zip` app artifact.
 
 ## Safety
 
