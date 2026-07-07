@@ -136,10 +136,7 @@ struct MenuPanelView: View {
     // MARK: - Battery
 
     private func batterySection(_ battery: BatteryStatus) -> some View {
-        let isLow = batterySafetyPolicy.shouldReleaseHold(
-            percentage: battery.percentage,
-            isCharging: battery.isCharging
-        )
+        let isLow = shouldReleaseHold(for: battery)
         let barColor = isLow ? Color(nsColor: .systemRed) : Color(nsColor: .systemGreen)
 
         return VStack(alignment: .leading, spacing: 10) {
@@ -160,26 +157,38 @@ struct MenuPanelView: View {
                 Text("\(battery.percentage)% left")
                     .font(.system(size: 14))
                 Spacer()
-                Text(batteryCaption(battery))
+                Text(batteryCaption(for: battery, isLow: isLow))
                     .font(.system(size: 13))
-                    .foregroundStyle(isLow ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(batteryCaptionStyle(isLow: isLow))
             }
         }
     }
 
-    private func batteryCaption(_ battery: BatteryStatus) -> String {
+    private func shouldReleaseHold(for battery: BatteryStatus) -> Bool {
+        batterySafetyPolicy.shouldReleaseHold(
+            percentage: battery.percentage,
+            isCharging: battery.isCharging
+        )
+    }
+
+    private func batteryCaption(for battery: BatteryStatus, isLow: Bool) -> String {
         if battery.isCharging {
             return "charging"
         }
 
-        if batterySafetyPolicy.shouldReleaseHold(
-            percentage: battery.percentage,
-            isCharging: battery.isCharging
-        ) {
+        if isLow {
             return "stopping to protect battery"
         }
 
         return "stops at \(batterySafetyPolicy.threshold)%"
+    }
+
+    private func batteryCaptionStyle(isLow: Bool) -> AnyShapeStyle {
+        if isLow {
+            return AnyShapeStyle(Color(nsColor: .systemRed))
+        }
+
+        return AnyShapeStyle(.secondary)
     }
 
     // MARK: - Agents

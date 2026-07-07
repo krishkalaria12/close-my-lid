@@ -315,7 +315,10 @@ struct TestRunner {
 
     private mutating func testLowBatteryIgnoresInactiveController() {
         let executor = RecordingPowerCommandExecutor()
-        let controller = SleepSessionController(executor: executor)
+        let controller = SleepSessionController(
+            executor: executor,
+            store: InMemorySleepSessionStore()
+        )
 
         do {
             let released = try controller.stopIfBatteryLow(percentage: 2, isCharging: false)

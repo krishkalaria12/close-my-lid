@@ -79,7 +79,7 @@ final class StatusMenuController: NSObject {
             return
         }
 
-        try? sleepController.stopIfBatteryLow(
+        _ = try? sleepController.stopIfBatteryLow(
             percentage: battery.percentage,
             isCharging: battery.isCharging
         )
