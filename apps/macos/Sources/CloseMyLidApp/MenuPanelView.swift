@@ -15,10 +15,14 @@ final class MenuPanelModel: ObservableObject {
     @Published var agentSessions: [AgentHarness: Int] = [:]
 
     func refresh() {
-        battery = BatteryStatusReader.read()
-        Task.detached(priority: .utility) { [weak self] in
-            let counts = AgentSessionDetector.sessionCounts()
-            await MainActor.run { self?.agentSessions = counts }
+        let currentBattery = BatteryStatusReader.read()
+        if battery != currentBattery {
+            battery = currentBattery
+        }
+
+        let counts = AgentSessionDetector.sessionCounts()
+        if agentSessions != counts {
+            agentSessions = counts
         }
     }
 }
@@ -36,14 +40,6 @@ struct AgentActivity: Identifiable {
         case 0: "idle"
         case 1: "1 session"
         default: "\(sessionCount) sessions"
-        }
-    }
-
-    var icon: AgentIcon {
-        switch harness {
-        case .claudeCode: .claude
-        case .codex: .codex
-        case .openCode: .opencode
         }
     }
 }
@@ -90,10 +86,7 @@ struct MenuPanelView: View {
                 .padding(.vertical, 6)
         }
         .frame(width: 300)
-        .onReceive(ticker) {
-            now = $0
-            model.refresh()
-        }
+        .onReceive(ticker) { now = $0 }
         .onAppear { now = Date() }
     }
 
@@ -186,12 +179,15 @@ struct MenuPanelView: View {
     }
 
     private var agentsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let agents = self.agents
+        let workingCount = agents.filter(\.isWorking).count
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Agents")
                     .font(.system(size: 15, weight: .bold))
                 Spacer()
-                Text(workingSummary)
+                Text(workingCount == 0 ? "all idle" : "\(workingCount) working")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
@@ -204,17 +200,12 @@ struct MenuPanelView: View {
         }
     }
 
-    private var workingSummary: String {
-        let count = agents.filter(\.isWorking).count
-        return count == 0 ? "all idle" : "\(count) working"
-    }
-
     private func agentRow(_ agent: AgentActivity) -> some View {
         HStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(agent.icon.badgeColor)
-                if let image = agent.icon.image {
+                    .fill(agent.harness.badgeColor)
+                if let image = agent.harness.icon {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()

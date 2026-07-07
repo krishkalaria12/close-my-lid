@@ -1,6 +1,6 @@
 /// A snapshot of one running process, reduced to the fields needed to
 /// recognize agent harness sessions.
-public struct RunningProcess: Equatable, Sendable {
+public struct RunningProcess: Sendable {
     public let id: Int32
     public let parentID: Int32
     public let executableName: String
@@ -18,10 +18,11 @@ public struct RunningProcess: Equatable, Sendable {
 ///
 /// A session is a matched process with no ancestor matched to the same
 /// harness, so helper children (Codex's npm wrapper spawning the native
-/// binary, OpenCode's TUI spawning its server) are not counted twice.
+/// binary, OpenCode's launcher spawning its server/TUI) are not counted
+/// twice.
 public enum AgentSessionClassifier {
     /// JavaScript runtimes that npm-installed harnesses run under.
-    static let scriptRuntimes: Set<String> = ["node", "bun", "deno"]
+    static let scriptRuntimes: Set<String> = ["node", "bun"]
 
     public static func sessionCounts(in processes: [RunningProcess]) -> [AgentHarness: Int] {
         var parents: [Int32: Int32] = [:]
@@ -47,18 +48,25 @@ public enum AgentSessionClassifier {
             return harness
         }
 
-        guard
-            scriptRuntimes.contains(process.executableName),
-            let script = process.arguments.dropFirst().first(where: { !$0.hasPrefix("-") })
-        else {
+        guard scriptRuntimes.contains(process.executableName) else {
             return nil
         }
 
-        let scriptName = script.split(separator: "/").last.map(String.init) ?? script
-        if let harness = AgentHarness(rawValue: scriptName) {
-            return harness
+        // Runtime flags and subcommands never contain a path separator, so
+        // only path-like arguments are script candidates. A candidate matches
+        // when its basename is a harness executable name (bin shims like
+        // /usr/local/bin/claude keep the harness name) or when it lives in
+        // the harness's npm package directory.
+        for argument in process.arguments.dropFirst() where argument.contains("/") {
+            if let basename = argument.split(separator: "/").last,
+               let harness = AgentHarness(rawValue: String(basename)) {
+                return harness
+            }
+            if let harness = AgentHarness.allCases.first(where: { argument.contains($0.scriptPathMarker) }) {
+                return harness
+            }
         }
-        return AgentHarness.allCases.first { script.contains($0.scriptPathMarker) }
+        return nil
     }
 
     private static func hasAncestor(
@@ -67,13 +75,16 @@ public enum AgentSessionClassifier {
         matches: [Int32: AgentHarness],
         parents: [Int32: Int32]
     ) -> Bool {
-        var visited: Set<Int32> = [pid]
+        // Parent chains in a snapshot are short; the hop bound terminates
+        // ppid cycles that pid reuse could introduce mid-snapshot.
         var current = parents[pid]
-        while let parent = current, parent > 0, visited.insert(parent).inserted {
+        var hops = 0
+        while let parent = current, parent > 0, hops < 64 {
             if matches[parent] == harness {
                 return true
             }
             current = parents[parent]
+            hops += 1
         }
         return false
     }

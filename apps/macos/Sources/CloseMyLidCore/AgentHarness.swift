@@ -20,15 +20,17 @@ public enum AgentHarness: String, CaseIterable, Sendable {
 
     /// Path fragment that identifies the harness when it runs as a script
     /// under a JavaScript runtime instead of as a native binary, as with
-    /// npm installs such as `node .../@anthropic-ai/claude-code/cli.js`.
+    /// npm installs such as `node .../node_modules/@anthropic-ai/claude-code/cli.js`.
+    /// Anchored to `node_modules/` so similarly named project directories
+    /// do not match.
     var scriptPathMarker: String {
         switch self {
         case .claudeCode:
-            "@anthropic-ai/claude-code"
+            "node_modules/@anthropic-ai/claude-code"
         case .codex:
-            "@openai/codex"
+            "node_modules/@openai/codex"
         case .openCode:
-            "opencode-ai"
+            "node_modules/opencode-ai"
         }
     }
 }
