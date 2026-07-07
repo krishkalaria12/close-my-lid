@@ -56,6 +56,7 @@ struct MenuPanelView: View {
     @ObservedObject var sleep: SleepSessionController
     @ObservedObject var model: MenuPanelModel
     let actions: MenuPanelActions
+    var batterySafetyPolicy = BatterySafetyPolicy()
 
     @State private var now = Date()
 
@@ -153,7 +154,10 @@ struct MenuPanelView: View {
     // MARK: - Battery
 
     private func batterySection(_ battery: BatteryStatus) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let isLow = shouldReleaseHold(for: battery)
+        let barColor = isLow ? Color(nsColor: .systemRed) : Color(nsColor: .systemGreen)
+
+        return VStack(alignment: .leading, spacing: 10) {
             Text("Battery")
                 .font(.system(size: 15, weight: .bold))
 
@@ -161,7 +165,7 @@ struct MenuPanelView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(.quaternary)
                     Capsule()
-                        .fill(Color(nsColor: .systemGreen))
+                        .fill(barColor)
                         .frame(width: max(8, proxy.size.width * CGFloat(battery.percentage) / 100))
                 }
             }
@@ -171,11 +175,38 @@ struct MenuPanelView: View {
                 Text("\(battery.percentage)% left")
                     .font(.system(size: 14))
                 Spacer()
-                Text(battery.isCharging ? "charging" : "stops below 15%")
+                Text(batteryCaption(for: battery, isLow: isLow))
                     .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(batteryCaptionStyle(isLow: isLow))
             }
         }
+    }
+
+    private func shouldReleaseHold(for battery: BatteryStatus) -> Bool {
+        batterySafetyPolicy.shouldReleaseHold(
+            percentage: battery.percentage,
+            isCharging: battery.isCharging
+        )
+    }
+
+    private func batteryCaption(for battery: BatteryStatus, isLow: Bool) -> String {
+        if battery.isCharging {
+            return "charging"
+        }
+
+        if isLow {
+            return "stopping to protect battery"
+        }
+
+        return "stops at \(batterySafetyPolicy.threshold)%"
+    }
+
+    private func batteryCaptionStyle(isLow: Bool) -> AnyShapeStyle {
+        if isLow {
+            return AnyShapeStyle(Color(nsColor: .systemRed))
+        }
+
+        return AnyShapeStyle(.secondary)
     }
 
     // MARK: - Agents

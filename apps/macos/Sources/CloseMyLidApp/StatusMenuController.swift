@@ -80,6 +80,8 @@ final class StatusMenuController: NSObject {
             try? sleepController.stopIfExpired()
         }
 
+        enforceBatterySafety()
+
         // A timed session's "ended" message is delivered by the system at its
         // fire date; when the reconciliation timer observes the hold turning
         // off, clear any remaining pending requests.
@@ -88,6 +90,17 @@ final class StatusMenuController: NSObject {
             notifier.cancelPending()
         }
         wasActive = isActive
+    }
+
+    private func enforceBatterySafety() {
+        guard let battery = BatteryStatusReader.read() else {
+            return
+        }
+
+        _ = try? sleepController.stopIfBatteryLow(
+            percentage: battery.percentage,
+            isCharging: battery.isCharging
+        )
     }
 
     @objc private func togglePanel() {
