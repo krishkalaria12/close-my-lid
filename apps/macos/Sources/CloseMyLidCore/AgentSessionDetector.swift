@@ -14,8 +14,9 @@ public enum AgentSessionDetector {
     }
 
     static func currentUserProcesses() -> [RunningProcess] {
-        // One scratch buffer, reused across every argument fetch in the scan.
-        var argumentBuffer = [UInt8](repeating: 0, count: argumentBufferSize)
+        // The ~256 KB argument buffer is allocated lazily on first use and then
+        // reused, so a scan with no JavaScript-runtime processes allocates none.
+        var argumentBuffer: [UInt8] = []
 
         return listProcesses().compactMap { info in
             guard Int32(info.kp_proc.p_stat) != zombie else {
@@ -25,12 +26,20 @@ public enum AgentSessionDetector {
             let name = withUnsafeBytes(of: info.kp_proc.p_comm) { raw in
                 String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
             }
-            let needsArguments = AgentSessionClassifier.scriptRuntimes.contains(name)
+
+            var argumentList: [String] = []
+            if AgentSessionClassifier.scriptRuntimes.contains(name) {
+                if argumentBuffer.isEmpty {
+                    argumentBuffer = [UInt8](repeating: 0, count: argumentBufferSize)
+                }
+                argumentList = arguments(ofPID: info.kp_proc.p_pid, into: &argumentBuffer)
+            }
+
             return RunningProcess(
                 id: info.kp_proc.p_pid,
                 parentID: info.kp_eproc.e_ppid,
                 executableName: name,
-                arguments: needsArguments ? arguments(ofPID: info.kp_proc.p_pid, into: &argumentBuffer) : []
+                arguments: argumentList
             )
         }
     }
@@ -39,20 +48,28 @@ public enum AgentSessionDetector {
         var request: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_UID, Int32(bitPattern: getuid())]
         let stride = MemoryLayout<kinfo_proc>.stride
 
-        var size = 0
-        guard sysctl(&request, UInt32(request.count), nil, &size, nil, 0) == 0, size > 0 else {
-            return []
-        }
+        // The table can grow between the size probe and the fetch, which makes
+        // the fetch fail with ENOMEM; re-probe and retry a few times before
+        // giving up, so transient churn doesn't drop the whole snapshot.
+        for _ in 0..<4 {
+            var size = 0
+            guard sysctl(&request, UInt32(request.count), nil, &size, nil, 0) == 0, size > 0 else {
+                return []
+            }
 
-        // Pad the buffer so a table that grows between the size probe and the
-        // fetch still fits; sysctl reports the bytes actually written.
-        let capacity = (size + size / 4) / stride + 1
-        var buffer = [kinfo_proc](repeating: kinfo_proc(), count: capacity)
-        var bufferSize = capacity * stride
-        guard sysctl(&request, UInt32(request.count), &buffer, &bufferSize, nil, 0) == 0 else {
-            return []
+            // Pad so a table that grows a little more between the calls still fits;
+            // sysctl reports the bytes actually written.
+            let capacity = (size + size / 4) / stride + 1
+            var buffer = [kinfo_proc](repeating: kinfo_proc(), count: capacity)
+            var bufferSize = capacity * stride
+            if sysctl(&request, UInt32(request.count), &buffer, &bufferSize, nil, 0) == 0 {
+                return Array(buffer.prefix(bufferSize / stride))
+            }
+            if errno != ENOMEM {
+                return []
+            }
         }
-        return Array(buffer.prefix(bufferSize / stride))
+        return []
     }
 
     private static let argumentBufferSize: Int = {

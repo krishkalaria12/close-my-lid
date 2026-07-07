@@ -20,6 +20,7 @@ struct TestRunner {
         testSessionSyncClearsStaleActiveState()
         testAgentSessionsCountNativeBinaries()
         testAgentSessionsCountScriptRuntimeInstalls()
+        testAgentSessionsDetectPackagePathWithoutBinaryBasename()
         testAgentSessionsIgnoreUnrelatedProcesses()
         testAgentSessionsSkipSameHarnessChildren()
         testAgentSessionsCountNestedDifferentHarnesses()
@@ -295,6 +296,25 @@ struct TestRunner {
         expect(
             counts == [.claudeCode: 2, .openCode: 1],
             "npm installs running under a JavaScript runtime are detected from arguments"
+        )
+    }
+
+    private mutating func testAgentSessionsDetectPackagePathWithoutBinaryBasename() {
+        // The script path's basename ("codex.js") is not a harness name, so this
+        // exercises the scriptPathMarker branch on its own, with no native child
+        // to supply the count in its place.
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(
+                id: 600,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "/usr/local/lib/node_modules/@openai/codex/bin/codex.js"]
+            )
+        ])
+
+        expect(
+            counts == [.codex: 1],
+            "an npm install matched only by its package-path marker is counted"
         )
     }
 

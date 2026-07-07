@@ -20,7 +20,15 @@ final class MenuPanelModel: ObservableObject {
             battery = currentBattery
         }
 
-        let counts = AgentSessionDetector.sessionCounts()
+        // The process-table scan runs off the main thread; only the resulting
+        // Sendable counts hop back to the main actor to update the UI.
+        Task.detached(priority: .utility) { [weak self] in
+            let counts = AgentSessionDetector.sessionCounts()
+            await self?.applyAgentSessions(counts)
+        }
+    }
+
+    private func applyAgentSessions(_ counts: [AgentHarness: Int]) {
         if agentSessions != counts {
             agentSessions = counts
         }

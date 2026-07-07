@@ -109,9 +109,13 @@ final class MenuBarPanelController: NSObject, NSWindowDelegate {
     // screen, so the process scan never runs for a UI nobody can see.
     private func startRefreshTimer() {
         stopRefreshTimer()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.model.refresh() }
         }
+        // Register in .common so refreshes keep firing during event tracking
+        // (e.g. while the user drags in the panel), like the view's own ticker.
+        RunLoop.main.add(timer, forMode: .common)
+        refreshTimer = timer
     }
 
     private func stopRefreshTimer() {
