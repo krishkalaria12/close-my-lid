@@ -37,6 +37,7 @@ The GitHub release also includes a zipped `.app` bundle:
 - Automatic cleanup when a timed session expires or the app quits
 - Launch at Login toggle
 - Battery Settings shortcut
+- Live session counts for Claude Code, OpenAI Codex CLI, and OpenCode in the menu panel
 - Local session persistence and live `pmset` reconciliation
 - Raycast commands for enable, disable, and status
 - CLI commands for scripts and package managers

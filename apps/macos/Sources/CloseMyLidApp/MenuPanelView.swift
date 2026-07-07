@@ -12,27 +12,41 @@ struct MenuPanelActions {
 @MainActor
 final class MenuPanelModel: ObservableObject {
     @Published var battery: BatteryStatus?
+    @Published var agentSessions: [AgentHarness: Int] = [:]
 
     func refresh() {
         battery = BatteryStatusReader.read()
+        Task.detached(priority: .utility) { [weak self] in
+            let counts = AgentSessionDetector.sessionCounts()
+            await MainActor.run { self?.agentSessions = counts }
+        }
     }
 }
 
 struct AgentActivity: Identifiable {
-    let name: String
-    let detail: String
-    let isWorking: Bool
-    let icon: AgentIcon
+    let harness: AgentHarness
+    let sessionCount: Int
 
-    var id: String { name }
+    var id: AgentHarness { harness }
+    var name: String { harness.displayName }
+    var isWorking: Bool { sessionCount > 0 }
+
+    var detail: String {
+        switch sessionCount {
+        case 0: "idle"
+        case 1: "1 session"
+        default: "\(sessionCount) sessions"
+        }
+    }
+
+    var icon: AgentIcon {
+        switch harness {
+        case .claudeCode: .claude
+        case .codex: .codex
+        case .openCode: .opencode
+        }
+    }
 }
-
-// Hardcoded for now; will be backed by real agent detection later.
-private let agents: [AgentActivity] = [
-    AgentActivity(name: "Claude Code", detail: "1 session", isWorking: true, icon: .claude),
-    AgentActivity(name: "OpenAI Codex CLI", detail: "idle", isWorking: false, icon: .codex),
-    AgentActivity(name: "OpenCode", detail: "idle", isWorking: false, icon: .opencode)
-]
 
 struct MenuPanelView: View {
     @ObservedObject var sleep: SleepSessionController
@@ -76,7 +90,10 @@ struct MenuPanelView: View {
                 .padding(.vertical, 6)
         }
         .frame(width: 300)
-        .onReceive(ticker) { now = $0 }
+        .onReceive(ticker) {
+            now = $0
+            model.refresh()
+        }
         .onAppear { now = Date() }
     }
 
@@ -161,6 +178,12 @@ struct MenuPanelView: View {
     }
 
     // MARK: - Agents
+
+    private var agents: [AgentActivity] {
+        AgentHarness.allCases.map {
+            AgentActivity(harness: $0, sessionCount: model.agentSessions[$0] ?? 0)
+        }
+    }
 
     private var agentsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
