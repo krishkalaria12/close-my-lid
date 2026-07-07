@@ -12,18 +12,35 @@ public enum AgentSessionDetector {
     }
 
     static func currentUserProcesses() -> [RunningProcess] {
-        listProcesses().map { info in
+        var argumentBuffer: [UInt8] = []
+        var processes: [RunningProcess] = []
+
+        for info in listProcesses() {
+            // 5 is SZOMB; exited-but-unreaped processes are not sessions.
+            guard info.kp_proc.p_stat != 5 else {
+                continue
+            }
+
             let name = withUnsafeBytes(of: info.kp_proc.p_comm) { raw in
                 String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
             }
             let pid = info.kp_proc.p_pid
-            return RunningProcess(
+            var arguments: [String] = []
+            if AgentSessionClassifier.scriptRuntimes.contains(name) {
+                if argumentBuffer.isEmpty {
+                    argumentBuffer = [UInt8](repeating: 0, count: argumentBufferSize)
+                }
+                arguments = Self.arguments(ofPID: pid, reusing: &argumentBuffer)
+            }
+
+            processes.append(RunningProcess(
                 id: pid,
                 parentID: info.kp_eproc.e_ppid,
                 executableName: name,
-                arguments: AgentSessionClassifier.scriptRuntimes.contains(name) ? arguments(ofPID: pid) : []
-            )
+                arguments: arguments
+            ))
         }
+        return processes
     }
 
     private static func listProcesses() -> [kinfo_proc] {
@@ -61,9 +78,8 @@ public enum AgentSessionDetector {
         return Int(argumentMax)
     }()
 
-    private static func arguments(ofPID pid: Int32) -> [String] {
+    private static func arguments(ofPID pid: Int32, reusing buffer: inout [UInt8]) -> [String] {
         var request: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-        var buffer = [UInt8](repeating: 0, count: argumentBufferSize)
         var size = buffer.count
         guard
             sysctl(&request, UInt32(request.count), &buffer, &size, nil, 0) == 0,
