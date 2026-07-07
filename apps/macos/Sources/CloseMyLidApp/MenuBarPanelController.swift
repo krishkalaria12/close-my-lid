@@ -14,6 +14,7 @@ final class MenuBarPanelController: NSObject, NSWindowDelegate {
     private let actions: MenuPanelActions
     private var mouseMonitor: Any?
     private var keyMonitor: Any?
+    private var refreshTimer: Timer?
     private weak var statusButton: NSStatusBarButton?
 
     init(sleep: SleepSessionController, actions: MenuPanelActions) {
@@ -94,12 +95,32 @@ final class MenuBarPanelController: NSObject, NSWindowDelegate {
         panel.invalidateShadow()
         button.highlight(true)
         installMonitors()
+        startRefreshTimer()
     }
 
     func close() {
         removeMonitors()
+        stopRefreshTimer()
         statusButton?.highlight(false)
         panel.orderOut(nil)
+    }
+
+    // Refresh battery and agent session counts only while the panel is on
+    // screen, so the process scan never runs for a UI nobody can see.
+    private func startRefreshTimer() {
+        stopRefreshTimer()
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.model.refresh() }
+        }
+        // Register in .common so refreshes keep firing during event tracking
+        // (e.g. while the user drags in the panel), like the view's own ticker.
+        RunLoop.main.add(timer, forMode: .common)
+        refreshTimer = timer
+    }
+
+    private func stopRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 
     func windowDidResignKey(_ notification: Notification) {
