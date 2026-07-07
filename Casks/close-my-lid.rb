@@ -1,6 +1,6 @@
 cask "close-my-lid" do
-  version "0.1.0"
-  sha256 "58293ab03a70b05aca3098ad681eef835c0c16dd0bca7be1ded3774b74a8cb0c"
+  version "0.2.0"
+  sha256 "dc63cabc17074fa8f6ff6a8b09a8bbc89a7e95a31460f9bf3d593949d3f0591b"
 
   url "https://github.com/krishkalaria12/close-my-lid/releases/download/v#{version}/Close-My-Lid-v#{version}-macOS.zip"
   name "Close My Lid"
