@@ -7,6 +7,7 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 - Native macOS menu bar app.
 - One-click sleep hold sessions: 30 minutes, 1 hour, 4 hours, and indefinite.
 - Automatic cleanup when a timed session expires or the app quits.
+- Session notifications: an immediate "started" message plus, for timed sessions, an "ending soon" warning 5 minutes out (`SessionNotificationPlanner.endingSoonLeadTime`) and an "ended" message. The pure `SessionNotificationPlanner` decides timing/copy; `SessionNotificationScheduler` delivers them through `UNUserNotificationCenter`. Scheduled messages are cancelled when a hold is stopped early. The unbundled `swift run` build skips notifications since `UNUserNotificationCenter.current()` requires a bundle identifier.
 - Raycast commands for starting and stopping the same power behavior.
 - Homebrew formula scaffolding for the first tagged release.
 - `v0.1.0` source tag and Homebrew SHA256 are wired into `Formula/close-my-lid.rb`.

@@ -7,20 +7,27 @@ final class StatusMenuController: NSObject {
     private let sleepController: SleepSessionController
     private let powerSettingsReader: PowerSettingsReading
     private let launchAtLoginController: LaunchAtLoginController
+    private let notifier: SessionNotifying
     private var panelController: MenuBarPanelController?
     private var settingsWindowController: SettingsWindowController?
     private var refreshTimer: Timer?
+    private var wasActive: Bool
 
     init(
         sleepController: SleepSessionController,
         powerSettingsReader: PowerSettingsReading,
-        launchAtLoginController: LaunchAtLoginController = LaunchAtLoginController()
+        launchAtLoginController: LaunchAtLoginController = LaunchAtLoginController(),
+        notifier: SessionNotifying = SessionNotificationScheduler()
     ) {
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.sleepController = sleepController
         self.powerSettingsReader = powerSettingsReader
         self.launchAtLoginController = launchAtLoginController
+        self.notifier = notifier
+        self.wasActive = sleepController.state.isActive
         super.init()
+
+        notifier.requestAuthorization()
 
         panelController = MenuBarPanelController(
             sleep: sleepController,
@@ -39,6 +46,8 @@ final class StatusMenuController: NSObject {
 
     func stopSession() throws {
         try sleepController.stop()
+        notifier.cancelPending()
+        wasActive = false
     }
 
     private func configureStatusItem() {
@@ -70,6 +79,15 @@ final class StatusMenuController: NSObject {
         } catch {
             try? sleepController.stopIfExpired()
         }
+
+        // A timed session's "ended" message is delivered by the system at its
+        // fire date; when the reconciliation timer observes the hold turning
+        // off, clear any remaining pending requests.
+        let isActive = sleepController.state.isActive
+        if wasActive && !isActive {
+            notifier.cancelPending()
+        }
+        wasActive = isActive
     }
 
     @objc private func togglePanel() {
@@ -83,9 +101,11 @@ final class StatusMenuController: NSObject {
     private func setHolding(_ holding: Bool) {
         do {
             if holding {
-                try sleepController.start(duration: .indefinitely)
+                try beginSession(.indefinitely)
             } else {
                 try sleepController.stop()
+                notifier.cancelPending()
+                wasActive = false
             }
         } catch {
             showError(error)
@@ -94,10 +114,17 @@ final class StatusMenuController: NSObject {
 
     private func startSession(_ duration: SessionDuration) {
         do {
-            try sleepController.start(duration: duration)
+            try beginSession(duration)
         } catch {
             showError(error)
         }
+    }
+
+    private func beginSession(_ duration: SessionDuration) throws {
+        let now = Date()
+        try sleepController.start(duration: duration, now: now)
+        notifier.apply(SessionNotificationPlanner.plan(duration: duration, startedAt: now))
+        wasActive = true
     }
 
     private func openSettings() {
