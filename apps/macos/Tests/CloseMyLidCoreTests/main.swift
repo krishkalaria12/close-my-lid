@@ -18,6 +18,10 @@ struct TestRunner {
         testSessionStatePersistsAfterStartAndStop()
         testSessionSyncReflectsExternalEnable()
         testSessionSyncClearsStaleActiveState()
+        testNotificationLeadTimeIsFiveMinutes()
+        testNotificationPlanForIndefiniteSession()
+        testNotificationPlanForTimedSession()
+        testNotificationPlanOmitsEndingSoonForShortSession()
 
         if failures.isEmpty {
             print("All CloseMyLidCore tests passed")
@@ -248,6 +252,65 @@ struct TestRunner {
 
         expect(controller.state == .inactive, "session sync clears stale active state")
         expect(store.savedStates.last == .inactive, "session sync persists stale state cleanup")
+    }
+
+    private mutating func testNotificationLeadTimeIsFiveMinutes() {
+        expect(
+            SessionNotificationPlanner.endingSoonLeadTime == 5 * 60,
+            "ending-soon warning leads the end by five minutes"
+        )
+    }
+
+    private mutating func testNotificationPlanForIndefiniteSession() {
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let plan = SessionNotificationPlanner.plan(duration: .indefinitely, startedAt: startedAt)
+
+        expect(plan.startTitle == "Close My Lid", "start notification uses the product title")
+        expect(
+            plan.startBody.contains("until you stop"),
+            "indefinite start copy explains it runs until stopped"
+        )
+        expect(plan.endingSoon == nil, "indefinite sessions have no ending-soon warning")
+        expect(plan.ended == nil, "indefinite sessions have no scheduled end notification")
+    }
+
+    private mutating func testNotificationPlanForTimedSession() {
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let plan = SessionNotificationPlanner.plan(
+            duration: .timed(SessionDuration.thirtyMinutes),
+            startedAt: startedAt
+        )
+
+        expect(
+            plan.startBody.contains("30 minutes"),
+            "timed start copy names the session length"
+        )
+        expect(
+            plan.ended?.fireDate == Date(timeIntervalSince1970: 1_900),
+            "the end notification fires at the session end"
+        )
+        expect(
+            plan.endingSoon?.fireDate == Date(timeIntervalSince1970: 1_600),
+            "the ending-soon warning fires five minutes before the end"
+        )
+        expect(
+            plan.endingSoon?.title == "Close My Lid",
+            "scheduled notifications carry the product title"
+        )
+    }
+
+    private mutating func testNotificationPlanOmitsEndingSoonForShortSession() {
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let plan = SessionNotificationPlanner.plan(duration: .timed(240), startedAt: startedAt)
+
+        expect(
+            plan.endingSoon == nil,
+            "sessions shorter than the lead time skip the ending-soon warning"
+        )
+        expect(
+            plan.ended?.fireDate == Date(timeIntervalSince1970: 340),
+            "short sessions still schedule an end notification"
+        )
     }
 }
 

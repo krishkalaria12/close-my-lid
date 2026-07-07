@@ -35,6 +35,7 @@ The GitHub release also includes a zipped `.app` bundle:
 - Menu bar controls for 30 minute, 1 hour, 4 hour, and indefinite sessions
 - Admin-approved closed-lid sleep hold using `pmset -a disablesleep`
 - Automatic cleanup when a timed session expires or the app quits
+- Notifications when a hold starts, is about to end, and has ended
 - Launch at Login toggle
 - Battery Settings shortcut
 - Local session persistence and live `pmset` reconciliation
@@ -46,6 +47,10 @@ The GitHub release also includes a zipped `.app` bundle:
 Run the app from `/Applications` after installing the cask. The menu shows the current hold status, session presets, Launch at Login, Battery Settings, and Quit.
 
 Closed-lid sleep prevention requires administrator approval. Close My Lid restores normal sleep behavior when a session stops, expires, or the app quits.
+
+### Notifications
+
+Close My Lid posts a notification when a hold starts, when a timed session has about 5 minutes left, and when it ends. macOS asks for notification permission the first time the app launches; you can change it later in System Settings › Notifications. Indefinite holds only post the start notification since they have no scheduled end.
 
 ## CLI
 
