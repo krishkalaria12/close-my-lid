@@ -18,7 +18,7 @@ extension AgentHarness {
         case .cursor:
             Color(red: 0.05, green: 0.05, blue: 0.06)
         case .pi:
-            Color(red: 0.10, green: 0.10, blue: 0.12)
+            Color(red: 0.04, green: 0.04, blue: 0.05)
         }
     }
 
@@ -77,8 +77,10 @@ extension AgentHarness {
             </svg>
             """#
         case .pi:
+            // Pi's blocky "Pi" monogram (pi.dev), reproduced as the white mark;
+            // the badge supplies the black rounded background.
             #"""
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#EDEDEF"><path d="M4 5h16v3h-3v11h-3V8h-3v11H8V8H4z"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#FFFFFF"><rect x="4" y="4" width="5" height="16"/><rect x="9" y="4" width="8" height="4"/><rect x="13" y="8" width="4" height="4"/><rect x="9" y="12" width="8" height="3"/><rect x="13" y="17" width="4" height="3"/></svg>
             """#
         }
     }
