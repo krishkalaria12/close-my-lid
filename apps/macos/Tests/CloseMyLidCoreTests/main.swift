@@ -36,6 +36,7 @@ struct TestRunner {
         testAgentSessionsSkipSameHarnessChildren()
         testAgentSessionsCountNestedDifferentHarnesses()
         testAgentSessionsCountNewNativeBinaries()
+        testAgentSessionsDetectCursorBundledRuntime()
         testAgentSessionsCountNewScriptRuntimeInstalls()
         testAgentSessionsDetectPiAlternatePackageScope()
 
@@ -570,19 +571,42 @@ struct TestRunner {
         )
     }
 
+    private mutating func testAgentSessionsDetectCursorBundledRuntime() {
+        // Cursor's `cursor-agent` launcher execs a bundled Node runtime, so
+        // the live process is `node` running index.js out of the versioned
+        // install directory — there is no `cursor-agent` process to match.
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(
+                id: 730,
+                parentID: 1,
+                executableName: "node",
+                arguments: [
+                    "node",
+                    "--use-system-ca",
+                    "/Users/dev/.local/share/cursor-agent/versions/2026.01.02-80e4d9b/index.js"
+                ]
+            )
+        ])
+
+        expect(
+            counts == [.cursor: 1],
+            "Cursor CLI's bundled Node runtime is detected from its install path"
+        )
+    }
+
     private mutating func testAgentSessionsCountNewScriptRuntimeInstalls() {
         let counts = AgentSessionClassifier.sessionCounts(in: [
             RunningProcess(
                 id: 710,
                 parentID: 1,
                 executableName: "node",
-                arguments: ["node", "/usr/local/lib/node_modules/@google/gemini-cli/dist/index.js"]
+                arguments: ["node", "/usr/local/lib/node_modules/@google/gemini-cli/bundle/gemini.js"]
             ),
             RunningProcess(
                 id: 711,
                 parentID: 1,
                 executableName: "node",
-                arguments: ["node", "/usr/local/lib/node_modules/@github/copilot/index.js"]
+                arguments: ["node", "/usr/local/lib/node_modules/@github/copilot/npm-loader.js"]
             ),
             RunningProcess(
                 id: 712,

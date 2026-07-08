@@ -56,15 +56,13 @@ public enum AgentSessionClassifier {
         // only path-like arguments are script candidates. A candidate matches
         // when its basename is a harness executable name (bin shims like
         // /usr/local/bin/claude keep the harness name) or when it lives in
-        // the harness's npm package directory.
+        // the harness's install directory.
         for argument in process.arguments.dropFirst() where argument.contains("/") {
             if let basename = argument.split(separator: "/").last,
                let harness = AgentHarness(rawValue: String(basename)) {
                 return harness
             }
-            if let harness = AgentHarness.allCases.first(where: { harness in
-                harness.scriptPathMarkers.contains(where: { argument.contains($0) })
-            }) {
+            if let harness = AgentHarness.matching(scriptPath: argument) {
                 return harness
             }
         }
