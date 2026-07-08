@@ -62,7 +62,9 @@ public enum AgentSessionClassifier {
                let harness = AgentHarness(rawValue: String(basename)) {
                 return harness
             }
-            if let harness = AgentHarness.allCases.first(where: { argument.contains($0.scriptPathMarker) }) {
+            if let harness = AgentHarness.allCases.first(where: { harness in
+                harness.scriptPathMarkers.contains(where: { argument.contains($0) })
+            }) {
                 return harness
             }
         }

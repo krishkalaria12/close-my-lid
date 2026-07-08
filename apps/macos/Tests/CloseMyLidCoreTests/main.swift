@@ -35,6 +35,9 @@ struct TestRunner {
         testAgentSessionsIgnoreUnrelatedProcesses()
         testAgentSessionsSkipSameHarnessChildren()
         testAgentSessionsCountNestedDifferentHarnesses()
+        testAgentSessionsCountNewNativeBinaries()
+        testAgentSessionsCountNewScriptRuntimeInstalls()
+        testAgentSessionsDetectPiAlternatePackageScope()
 
         if failures.isEmpty {
             print("All CloseMyLidCore tests passed")
@@ -494,7 +497,7 @@ struct TestRunner {
 
     private mutating func testAgentSessionsDetectPackagePathWithoutBinaryBasename() {
         // The script path's basename ("codex.js") is not a harness name, so this
-        // exercises the scriptPathMarker branch on its own, with no native child
+        // exercises the scriptPathMarkers branch on its own, with no native child
         // to supply the count in its place.
         let counts = AgentSessionClassifier.sessionCounts(in: [
             RunningProcess(
@@ -550,6 +553,66 @@ struct TestRunner {
         expect(
             counts == [.claudeCode: 1, .codex: 1],
             "a harness launched inside another harness still counts as a session"
+        )
+    }
+
+    private mutating func testAgentSessionsCountNewNativeBinaries() {
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(id: 700, parentID: 1, executableName: "gemini"),
+            RunningProcess(id: 701, parentID: 1, executableName: "copilot"),
+            RunningProcess(id: 702, parentID: 1, executableName: "cursor-agent"),
+            RunningProcess(id: 703, parentID: 1, executableName: "pi")
+        ])
+
+        expect(
+            counts == [.gemini: 1, .copilot: 1, .cursor: 1, .pi: 1],
+            "newly added native harness binaries are counted one session per process"
+        )
+    }
+
+    private mutating func testAgentSessionsCountNewScriptRuntimeInstalls() {
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(
+                id: 710,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "/usr/local/lib/node_modules/@google/gemini-cli/dist/index.js"]
+            ),
+            RunningProcess(
+                id: 711,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "/usr/local/lib/node_modules/@github/copilot/index.js"]
+            ),
+            RunningProcess(
+                id: 712,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js"]
+            )
+        ])
+
+        expect(
+            counts == [.gemini: 1, .copilot: 1, .pi: 1],
+            "npm installs of the new harnesses are detected from their package paths"
+        )
+    }
+
+    private mutating func testAgentSessionsDetectPiAlternatePackageScope() {
+        // Pi migrated npm scopes; the earlier @mariozechner package still
+        // resolves and must keep matching alongside @earendil-works.
+        let counts = AgentSessionClassifier.sessionCounts(in: [
+            RunningProcess(
+                id: 720,
+                parentID: 1,
+                executableName: "node",
+                arguments: ["node", "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/cli.js"]
+            )
+        ])
+
+        expect(
+            counts == [.pi: 1],
+            "an npm install under Pi's earlier package scope is still counted"
         )
     }
 }

@@ -39,7 +39,7 @@ The GitHub release also includes a zipped `.app` bundle:
 - Notifications when a hold starts, is about to end, and has ended
 - Launch at Login toggle
 - Battery Settings shortcut
-- Live session counts for Claude Code, OpenAI Codex CLI, and OpenCode in the menu panel
+- Live session counts for Claude Code, OpenAI Codex CLI, OpenCode, Gemini CLI, GitHub Copilot CLI, Cursor CLI, and Pi in the menu panel
 - Local session persistence and live `pmset` reconciliation
 - Raycast commands for enable, disable, and status
 - CLI commands for scripts and package managers
