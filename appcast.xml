@@ -1,9 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>Close My Lid Updates</title>
-    <link>https://github.com/krishkalaria12/close-my-lid</link>
-    <description>Stable updates for Close My Lid.</description>
-    <language>en</language>
-  </channel>
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Close My Lid</title>
+        <item>
+            <title>0.3.0</title>
+            <pubDate>Sat, 11 Jul 2026 12:35:45 +0530</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/krishkalaria12/close-my-lid/releases/download/v0.3.0/Close-My-Lid-v0.3.0-macOS.zip" length="4022338" type="application/octet-stream" sparkle:edSignature="TF1Wa8+gggpttrMU1Mxdefex5pRcLqJ+f84H6SIBZ8EH25JC7CpHh6nB18UelKB07/+1hZbPZfCIivkshzsmBA=="/>
+        </item>
+    </channel>
 </rss>

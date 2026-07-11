@@ -14,7 +14,7 @@ REXML::XPath.each(document, "/rss/channel/item") do |item|
     next
   end
 
-  version = enclosure.attributes["sparkle:version"]
+  version = enclosure.attributes["sparkle:version"] || item.elements["sparkle:version"]&.text
   signature = enclosure.attributes["sparkle:edSignature"]
   url = enclosure.attributes["url"]
   length = enclosure.attributes["length"]
