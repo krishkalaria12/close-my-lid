@@ -11,12 +11,13 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 - Session notifications: an immediate "started" message plus, for timed sessions, an "ending soon" warning 5 minutes out (`SessionNotificationPlanner.endingSoonLeadTime`) and an "ended" message. The pure `SessionNotificationPlanner` decides timing/copy; `SessionNotificationScheduler` delivers them through `UNUserNotificationCenter`. Scheduled messages are cancelled when a hold is stopped early. The unbundled `swift run` build skips notifications since `UNUserNotificationCenter.current()` requires a bundle identifier.
 - Raycast commands for starting and stopping the same power behavior.
 - Homebrew formula scaffolding for the first tagged release.
-- `v0.2.0` source tag and Homebrew SHA256 are wired into `Formula/close-my-lid.rb`.
+- The current release source tag and Homebrew SHA256 are wired into `Formula/close-my-lid.rb`.
 - Homebrew cask installs the released `.app` artifact from GitHub Releases.
 - CLI commands for scripted package usage: `enable`, `disable`, `status`, `--help`, and `--version`.
 - `.app` bundle packaging with `LSUIElement` so the app presents as a menu bar utility instead of a Dock app.
 - Local session persistence and `pmset` reconciliation so app, CLI, and Raycast changes do not drift silently.
 - Launch at Login toggle via `SMAppService`.
+- Sparkle-powered update discovery, installation, and relaunch through a signed appcast.
 
 ## Implementation Notes
 

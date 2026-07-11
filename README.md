@@ -28,7 +28,7 @@ The cask installs `Close My Lid.app` into `/Applications`. The formula installs 
 
 The GitHub release also includes a zipped `.app` bundle:
 
-- [Close My Lid v0.2.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.2.0)
+- [Close My Lid v0.3.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.3.0)
 
 ## Features
 
@@ -38,6 +38,7 @@ The GitHub release also includes a zipped `.app` bundle:
 - Low-battery safety release that restores normal sleep at 15% when unplugged
 - Notifications when a hold starts, is about to end, and has ended
 - Launch at Login toggle
+- In-app update checks, installation, and restart
 - Battery Settings shortcut
 - Live session counts for Claude Code, OpenAI Codex CLI, OpenCode, Gemini CLI, GitHub Copilot CLI, Cursor CLI, and Pi in the menu panel
 - Local session persistence and live `pmset` reconciliation
@@ -115,8 +116,8 @@ npm run dev
 
 ## Packaging
 
-The formula builds from the `v0.2.0` source tag.
-The cask installs the released `Close-My-Lid-v0.2.0-macOS.zip` app artifact.
+The formula builds from the `v0.3.0` source tag.
+The cask installs the released `Close-My-Lid-v0.3.0-macOS.zip` app artifact.
 
 ## Safety
 
