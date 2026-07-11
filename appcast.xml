@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Close My Lid Updates</title>
+    <link>https://github.com/krishkalaria12/close-my-lid</link>
+    <description>Stable updates for Close My Lid.</description>
+    <language>en</language>
+  </channel>
+</rss>

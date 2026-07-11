@@ -5,6 +5,7 @@ import SwiftUI
 struct MenuPanelActions {
     var setHolding: (Bool) -> Void
     var hold: (SessionDuration) -> Void
+    var checkForUpdates: () -> Void
     var openSettings: () -> Void
     var quit: () -> Void
 }
@@ -55,6 +56,7 @@ struct AgentActivity: Identifiable {
 struct MenuPanelView: View {
     @ObservedObject var sleep: SleepSessionController
     @ObservedObject var model: MenuPanelModel
+    @ObservedObject var updates: UpdateController
     let actions: MenuPanelActions
     var batterySafetyPolicy = BatterySafetyPolicy()
 
@@ -297,6 +299,16 @@ struct MenuPanelView: View {
 
     private var footer: some View {
         VStack(spacing: 2) {
+            if let version = updates.availableVersion {
+                UpdateAvailableRow(version: version, action: actions.checkForUpdates)
+            } else {
+                FooterRow(
+                    title: "Check for Updates…",
+                    shortcut: "",
+                    action: actions.checkForUpdates,
+                    isEnabled: updates.canCheckForUpdates
+                )
+            }
             FooterRow(title: "Settings…", shortcut: "⌘ ,", action: actions.openSettings)
             FooterRow(title: "Quit Close My Lid", shortcut: "⌘Q", action: actions.quit)
         }
@@ -321,6 +333,7 @@ private struct FooterRow: View {
     let title: String
     let shortcut: String
     let action: () -> Void
+    var isEnabled = true
 
     @State private var isHovered = false
 
@@ -344,5 +357,33 @@ private struct FooterRow: View {
                 .fill(Color.primary.opacity(isHovered ? 0.08 : 0))
         )
         .onHover { isHovered = $0 }
+        .disabled(!isEnabled)
+    }
+}
+
+private struct UpdateAvailableRow: View {
+    let version: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Update Available")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Version \(version) — install and restart")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 9)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }

@@ -17,11 +17,11 @@ final class MenuBarPanelController: NSObject, NSWindowDelegate {
     private var refreshTimer: Timer?
     private weak var statusButton: NSStatusBarButton?
 
-    init(sleep: SleepSessionController, actions: MenuPanelActions) {
+    init(sleep: SleepSessionController, actions: MenuPanelActions, updates: UpdateController) {
         self.model = MenuPanelModel()
         self.actions = actions
         self.hostingView = NSHostingView(
-            rootView: MenuPanelView(sleep: sleep, model: model, actions: actions)
+            rootView: MenuPanelView(sleep: sleep, model: model, updates: updates, actions: actions)
         )
 
         panel = KeyablePanel(

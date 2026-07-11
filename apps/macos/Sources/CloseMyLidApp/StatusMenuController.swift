@@ -16,6 +16,7 @@ final class StatusMenuController: NSObject {
     init(
         sleepController: SleepSessionController,
         powerSettingsReader: PowerSettingsReading,
+        updateController: UpdateController,
         launchAtLoginController: LaunchAtLoginController = LaunchAtLoginController(),
         notifier: SessionNotifying = SessionNotificationScheduler()
     ) {
@@ -34,9 +35,11 @@ final class StatusMenuController: NSObject {
             actions: MenuPanelActions(
                 setHolding: { [weak self] holding in self?.setHolding(holding) },
                 hold: { [weak self] duration in self?.startSession(duration) },
+                checkForUpdates: { updateController.checkForUpdates() },
                 openSettings: { [weak self] in self?.openSettings() },
                 quit: { [weak self] in self?.quit() }
-            )
+            ),
+            updates: updateController
         )
 
         configureStatusItem()

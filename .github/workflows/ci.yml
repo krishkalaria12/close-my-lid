@@ -47,4 +47,9 @@ jobs:
         run: |
           ./scripts/package-macos-app.sh
           plutil -lint "dist/macos/Close My Lid.app/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' 'dist/macos/Close My Lid.app/Contents/Info.plist')" = "https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/appcast.xml"
+          test -n "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' 'dist/macos/Close My Lid.app/Contents/Info.plist')"
+          test -d "dist/macos/Close My Lid.app/Contents/Frameworks/Sparkle.framework"
+          otool -L "dist/macos/Close My Lid.app/Contents/MacOS/CloseMyLid" | grep -F '@rpath/Sparkle.framework/'
           codesign --verify --deep --strict --verbose=2 "dist/macos/Close My Lid.app"
+          ruby scripts/validate-appcast.rb
