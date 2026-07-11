@@ -20,10 +20,11 @@ jobs:
       - name: Validate Swift package
         working-directory: apps/macos
         run: |
-          swift run CloseMyLidCoreTests
-          swift build --product CloseMyLid
-          swift run CloseMyLid --version
-          swift run CloseMyLid status
+          swift build --jobs 2 --product CloseMyLidCoreTests
+          .build/debug/CloseMyLidCoreTests
+          swift build --jobs 2 --product CloseMyLid
+          .build/debug/CloseMyLid --version
+          .build/debug/CloseMyLid status
 
       - name: Install Raycast dependencies
         working-directory: packages/raycast
