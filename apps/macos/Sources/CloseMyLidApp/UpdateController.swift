@@ -4,11 +4,13 @@ import Sparkle
 @MainActor
 final class UpdateController: NSObject, ObservableObject, SPUUpdaterDelegate {
     private static let noUpdateErrorCode = 1001 // SUNoUpdateError from Sparkle's SUErrors.h
+    private static let initialCheckDelay: TimeInterval = 2
+    private static let checkInterval: TimeInterval = 6 * 60 * 60
 
     @Published private(set) var availableVersion: String?
     @Published private(set) var canCheckForUpdates = false
 
-    private var informationTimer: Timer?
+    private var scheduledCheckTimer: Timer?
     private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: self,
@@ -27,12 +29,15 @@ final class UpdateController: NSObject, ObservableObject, SPUUpdaterDelegate {
             .receive(on: RunLoop.main)
             .assign(to: &$canCheckForUpdates)
 
-        Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in
+        Timer.scheduledTimer(withTimeInterval: Self.initialCheckDelay, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.checkForUpdateInformation()
             }
         }
-        informationTimer = Timer.scheduledTimer(withTimeInterval: 6 * 60 * 60, repeats: true) { [weak self] _ in
+        scheduledCheckTimer = Timer.scheduledTimer(
+            withTimeInterval: Self.checkInterval,
+            repeats: true
+        ) { [weak self] _ in
             Task { @MainActor in
                 self?.checkForUpdateInformation()
             }

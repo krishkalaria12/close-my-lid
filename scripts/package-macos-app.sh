@@ -60,13 +60,13 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
   <true/>
   <key>SUFeedURL</key>
   <string>$SPARKLE_FEED_URL</string>
+  <key>SUPublicEDKey</key>
+  <string>$SPARKLE_PUBLIC_KEY</string>
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © 2026 Krish Kalaria. All rights reserved.</string>
 </dict>
 </plist>
 PLIST
-
-/usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_KEY" "$APP_DIR/Contents/Info.plist"
 
 if command -v codesign >/dev/null; then
   codesign_args=(--force --sign "$CODE_SIGN_IDENTITY")

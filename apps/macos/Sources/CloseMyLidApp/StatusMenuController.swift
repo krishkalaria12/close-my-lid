@@ -6,6 +6,7 @@ final class StatusMenuController: NSObject {
     private let statusItem: NSStatusItem
     private let sleepController: SleepSessionController
     private let powerSettingsReader: PowerSettingsReading
+    private let updateController: UpdateController
     private let launchAtLoginController: LaunchAtLoginController
     private let notifier: SessionNotifying
     private var panelController: MenuBarPanelController?
@@ -23,6 +24,7 @@ final class StatusMenuController: NSObject {
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.sleepController = sleepController
         self.powerSettingsReader = powerSettingsReader
+        self.updateController = updateController
         self.launchAtLoginController = launchAtLoginController
         self.notifier = notifier
         self.wasActive = sleepController.state.isActive
@@ -35,11 +37,10 @@ final class StatusMenuController: NSObject {
             actions: MenuPanelActions(
                 setHolding: { [weak self] holding in self?.setHolding(holding) },
                 hold: { [weak self] duration in self?.startSession(duration) },
-                checkForUpdates: { updateController.checkForUpdates() },
                 openSettings: { [weak self] in self?.openSettings() },
                 quit: { [weak self] in self?.quit() }
             ),
-            updates: updateController
+            updates: self.updateController
         )
 
         configureStatusItem()

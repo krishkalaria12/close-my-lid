@@ -5,7 +5,6 @@ import SwiftUI
 struct MenuPanelActions {
     var setHolding: (Bool) -> Void
     var hold: (SessionDuration) -> Void
-    var checkForUpdates: () -> Void
     var openSettings: () -> Void
     var quit: () -> Void
 }
@@ -300,12 +299,12 @@ struct MenuPanelView: View {
     private var footer: some View {
         VStack(spacing: 2) {
             if let version = updates.availableVersion {
-                UpdateAvailableRow(version: version, action: actions.checkForUpdates)
+                UpdateAvailableRow(version: version, action: updates.checkForUpdates)
             } else {
                 FooterRow(
                     title: "Check for Updates…",
                     shortcut: "",
-                    action: actions.checkForUpdates,
+                    action: updates.checkForUpdates,
                     isEnabled: updates.canCheckForUpdates
                 )
             }

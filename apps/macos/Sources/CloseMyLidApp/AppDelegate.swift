@@ -3,12 +3,10 @@ import CloseMyLidCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuController: StatusMenuController?
-    private var updateController: UpdateController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let powerManager = PmsetPowerManager()
         let updateController = UpdateController()
-        self.updateController = updateController
         NSApp.setActivationPolicy(.accessory)
         menuController = StatusMenuController(
             sleepController: SleepSessionController(executor: powerManager),
