@@ -15,7 +15,7 @@ class CloseMyLid < Formula
       "--product", "CloseMyLid",
       "--disable-sandbox"
     bin.install "apps/macos/.build/release/CloseMyLid" => "close-my-lid"
-    sparkle_framework = Dir["apps/macos/.build/*-apple-macosx/release/Sparkle.framework"].fetch(0)
+    sparkle_framework = buildpath.glob("apps/macos/.build/*-apple-macosx/release/Sparkle.framework").first
     prefix.install sparkle_framework => "Frameworks/Sparkle.framework"
   end
 
