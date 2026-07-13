@@ -28,11 +28,11 @@ CLI-only users run:
 brew install krishkalaria12/close-my-lid/close-my-lid
 ```
 
-Existing users whose same-named tap points to the application repository switch its remote in place:
+Existing users whose same-named tap points to the application repository replace the old custom clone while preserving installed packages:
 
 ```sh
-brew tap --custom-remote krishkalaria12/close-my-lid \
-  https://github.com/krishkalaria12/homebrew-close-my-lid
+brew untap --force krishkalaria12/close-my-lid
+brew tap krishkalaria12/close-my-lid
 ```
 
 The README, release guide, current release notes, and release-note validation are updated for these commands. Migration instructions remain visible through at least the next release.
@@ -67,7 +67,7 @@ Artifact architecture is verified during implementation. If the released applica
 
 ## Authentication and Security
 
-Cross-repository writes use a fine-grained GitHub personal access token restricted to `krishkalaria12/homebrew-close-my-lid`, with only Contents and Pull Requests write permissions. It is stored as an Actions secret in the application repository. The existing broad GitHub CLI login token is never copied into repository secrets.
+Cross-repository writes use a fine-grained GitHub personal access token restricted to `krishkalaria12/homebrew-close-my-lid`, with Contents and Pull Requests write permissions plus Administration read permission so the updater can verify branch protection. It is stored as an Actions secret in the application repository. The existing broad GitHub CLI login token is never copied into repository secrets.
 
 The token is used only to push updater branches, manage the corresponding pull request, and enable auto-merge. Tap CI runs with the repository's normal read-only token except for GitHub's merge operation.
 

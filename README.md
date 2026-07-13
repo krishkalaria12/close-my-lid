@@ -6,18 +6,23 @@ It ships as a native macOS menu bar app, a `close-my-lid` CLI, a Raycast extensi
 
 ## Install
 
-Most users only need the menu bar app. For a fresh install, run both commands:
+Most users only need the menu bar app:
 
 ```sh
-brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
 brew install --cask krishkalaria12/close-my-lid/close-my-lid
 ```
 
 Install the CLI only if you want terminal/script access:
 
 ```sh
-brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
 brew install krishkalaria12/close-my-lid/close-my-lid
+```
+
+If you installed Close My Lid before the dedicated Homebrew tap existed, replace the old custom tap clone once. Installed packages are preserved:
+
+```sh
+brew untap --force krishkalaria12/close-my-lid
+brew tap krishkalaria12/close-my-lid
 ```
 
 The cask installs `Close My Lid.app` into `/Applications`. The formula installs the `close-my-lid` command-line tool.
@@ -79,8 +84,8 @@ The project is organized as a small monorepo so the native app, Raycast extensio
 ```text
 apps/macos/        Native macOS menu bar app, CLI, and Swift tests
 packages/raycast/  Raycast extension
-Formula/           Homebrew formula for the CLI
-Casks/             Homebrew cask for the app bundle
+Formula/           Legacy migration copy of the Homebrew CLI formula
+Casks/             Legacy migration copy of the Homebrew app cask
 docs/              Product and implementation notes
 scripts/           Release and packaging helpers
 ```
@@ -112,8 +117,7 @@ npm run dev
 
 ## Packaging
 
-The formula builds from the `v0.3.0` source tag.
-The cask installs the released `Close-My-Lid-v0.3.0-macOS.zip` app artifact.
+The canonical packages live in [`krishkalaria12/homebrew-close-my-lid`](https://github.com/krishkalaria12/homebrew-close-my-lid). The copies in this repository remain temporarily for users migrating from the old custom tap remote.
 
 ## Safety
 

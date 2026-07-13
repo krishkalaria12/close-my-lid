@@ -33,13 +33,13 @@ Create a conventional public Homebrew tap, migrate installation guidance, automa
 1. Enable squash merge, delete-branch-on-merge, and auto-merge in the tap repository.
 2. Run tap CI on the initial default branch and identify its exact check name.
 3. Protect `main` with required CI, no force pushes, and no deletions while allowing the configured automation path.
-4. Document and request the single fine-grained secret needed by the application repository: tap-only Contents and Pull Requests write access.
+4. Document and request the single fine-grained secret needed by the application repository: tap-only Contents and Pull Requests write access plus Administration read access for branch-protection verification.
 
 ## Task 5: End-to-end verification and publication
 
 1. Verify clean automatic tap resolution without relying on the existing custom remote.
 2. Verify cask metadata/download and formula install/test.
-3. Verify changing an existing custom tap remote to the conventional repository.
+3. Verify replacing an existing custom tap clone with the conventional repository while preserving installed packages.
 4. Run all application-side updater, instruction, syntax, style, and diff checks.
 5. Commit and push application-repository changes.
 6. Report the tap URL, commits, workflows, test evidence, and the exact remaining secret step if credentials block live updater execution.

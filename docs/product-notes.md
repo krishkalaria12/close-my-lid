@@ -10,9 +10,8 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 - Low-battery safety release: an active hold is stopped and normal sleep restored when the battery drops to 15% (`BatterySafetyPolicy.defaultThreshold`) on battery power. Charging Macs are left alone. Enforced on the same 30 second reconciliation timer as `pmset` state.
 - Session notifications: an immediate "started" message plus, for timed sessions, an "ending soon" warning 5 minutes out (`SessionNotificationPlanner.endingSoonLeadTime`) and an "ended" message. The pure `SessionNotificationPlanner` decides timing/copy; `SessionNotificationScheduler` delivers them through `UNUserNotificationCenter`. Scheduled messages are cancelled when a hold is stopped early. The unbundled `swift run` build skips notifications since `UNUserNotificationCenter.current()` requires a bundle identifier.
 - Raycast commands for starting and stopping the same power behavior.
-- Homebrew formula scaffolding for the first tagged release.
-- The current release source tag and Homebrew SHA256 are wired into `Formula/close-my-lid.rb`.
-- Homebrew cask installs the released `.app` artifact from GitHub Releases.
+- The canonical Homebrew formula and cask live in `krishkalaria12/homebrew-close-my-lid`; the in-repository copies are retained temporarily for old custom-tap users.
+- Published releases drive an automated tap update pull request with verified source and app-archive checksums.
 - CLI commands for scripted package usage: `enable`, `disable`, `status`, `--help`, and `--version`.
 - `.app` bundle packaging with `LSUIElement` so the app presents as a menu bar utility instead of a Dock app.
 - Local session persistence and `pmset` reconciliation so app, CLI, and Raycast changes do not drift silently.

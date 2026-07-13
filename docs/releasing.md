@@ -2,6 +2,16 @@
 
 The macOS app uses Sparkle 2 to discover, download, install, and relaunch updates. The committed `appcast.xml` is the stable update feed. Never publish its update item before the matching GitHub Release archive is available.
 
+## Homebrew updater setup
+
+The `update Homebrew tap` workflow uses the `TAP_REPO_TOKEN` Actions secret. Create a fine-grained personal access token restricted to `krishkalaria12/homebrew-close-my-lid` with:
+
+- Contents: Read and write
+- Pull requests: Read and write
+- Administration: Read-only
+
+The Administration permission lets the updater verify that `main` still enforces the exact GitHub Actions `validate` check before enabling auto-merge. Do not use a broad account token for this secret.
+
 ## Signing setup
 
 Sparkle's Ed25519 private key is stored in the developer's login Keychain under the `close-my-lid` account. The corresponding public key is embedded by `scripts/package-macos-app.sh`.
@@ -48,14 +58,20 @@ apps/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast \
 ```
 
 6. Review the generated feed, replace `appcast.xml`, and run `ruby scripts/validate-appcast.rb` before committing it.
-7. Keep the Homebrew cask version and checksum aligned with the same GitHub Release.
-8. Include complete fresh-install instructions in the release notes. This project is a custom tap hosted in the application repository, so the tap command must include the repository URL and must appear in the same code block as the install command:
+7. Confirm the Homebrew update workflow opens or updates a pull request in `krishkalaria12/homebrew-close-my-lid` with the matching formula and cask checksums.
+8. Include the conventional fresh-install command in its own release-note code block:
 
 ```bash
-brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
 brew install --cask krishkalaria12/close-my-lid/close-my-lid
 ```
 
-Do not publish the `brew install` command by itself: without the explicit tap command, Homebrew looks for the nonexistent conventional repository `krishkalaria12/homebrew-close-my-lid`. Put upgrade instructions in a separate "Existing installations" section so they cannot be mistaken for fresh-install instructions.
+Keep this migration command in release notes through at least the first release after the dedicated tap launches:
+
+```bash
+brew untap --force krishkalaria12/close-my-lid
+brew tap krishkalaria12/close-my-lid
+```
+
+Put upgrade instructions in a separate "Existing installations" section so they cannot be mistaken for fresh-install instructions.
 
 Test the full path from an older installed, Developer ID-signed build. A build of the current version cannot exercise replacement and relaunch.
