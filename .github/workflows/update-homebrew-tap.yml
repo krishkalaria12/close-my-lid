@@ -1,0 +1,180 @@
+name: update Homebrew tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (for example, v1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-tap-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TAP_REPOSITORY: krishkalaria12/homebrew-close-my-lid
+      GH_TOKEN: ${{ secrets.TAP_REPO_TOKEN }}
+
+    steps:
+      - name: Validate release tag
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          ruby -e '
+            tag = ENV.fetch("RELEASE_TAG")
+            pattern = /\Av(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\z/
+            abort "release tag must be a stable semantic version such as v1.2.3" unless tag.match?(pattern)
+            File.open(ENV.fetch("GITHUB_OUTPUT"), "a") { |output| output.puts("tag=#{tag}") }
+          '
+
+      - name: Check out application repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ env.TAP_REPOSITORY }}
+          token: ${{ secrets.TAP_REPO_TOKEN }}
+          path: homebrew-tap
+          fetch-depth: 0
+
+      - name: Select deterministic update branch
+        id: branch
+        working-directory: homebrew-tap
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          branch="automation/update-${RELEASE_TAG}"
+          echo "name=${branch}" >> "$GITHUB_OUTPUT"
+          set +e
+          remote_ref="$(git ls-remote --exit-code --heads origin "refs/heads/${branch}")"
+          remote_status=$?
+          set -e
+          case "$remote_status" in
+            0) echo "remote_sha=${remote_ref%%[[:space:]]*}" >> "$GITHUB_OUTPUT" ;;
+            2) echo "remote_sha=" >> "$GITHUB_OUTPUT" ;;
+            *) echo "could not inspect remote update branch" >&2; exit "$remote_status" ;;
+          esac
+          git checkout -B "$branch" origin/main
+
+      - name: Update formula and cask
+        id: update
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          result="$(ruby scripts/update-homebrew-tap.rb \
+            --tap-dir homebrew-tap \
+            --tag "$RELEASE_TAG" \
+            --repository "$GITHUB_REPOSITORY")"
+          echo "$result"
+          echo "result=${result}" >> "$GITHUB_OUTPUT"
+          if git -C homebrew-tap diff --quiet origin/main -- Formula/close-my-lid.rb Casks/close-my-lid.rb; then
+            echo "needs_pr=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_pr=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push tap update
+        if: steps.update.outputs.result == 'changed'
+        working-directory: homebrew-tap
+        env:
+          BRANCH: ${{ steps.branch.outputs.name }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          REMOTE_SHA: ${{ steps.branch.outputs.remote_sha }}
+        run: |
+          set -euo pipefail
+          unexpected="$(git status --porcelain=v1 | awk '{ print $2 }' | grep -Ev '^(Formula/close-my-lid\.rb|Casks/close-my-lid\.rb)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "refusing to publish unexpected changed files:" >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/close-my-lid.rb Casks/close-my-lid.rb
+          git commit -m "chore: update close-my-lid to ${RELEASE_TAG}"
+          committed_files="$(git diff --name-only origin/main...HEAD)"
+          unexpected="$(echo "$committed_files" | grep -Ev '^(Formula/close-my-lid\.rb|Casks/close-my-lid\.rb)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "refusing to publish unexpected committed files:" >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
+          git push --force-with-lease="refs/heads/${BRANCH}:${REMOTE_SHA}" origin "HEAD:refs/heads/${BRANCH}"
+
+      - name: Open or reuse update pull request
+        if: steps.update.outputs.needs_pr == 'true'
+        id: pull-request
+        env:
+          BRANCH: ${{ steps.branch.outputs.name }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          pr_url="$(gh pr list \
+            --repo "$TAP_REPOSITORY" \
+            --head "$BRANCH" \
+            --state open \
+            --json url \
+            --jq '.[0].url')"
+          if [ -z "$pr_url" ]; then
+            pr_url="$(gh pr create \
+              --repo "$TAP_REPOSITORY" \
+              --base main \
+              --head "$BRANCH" \
+              --title "Update Close My Lid to ${RELEASE_TAG}" \
+              --body "Automated Homebrew formula and cask update for ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}.")"
+          fi
+          echo "url=${pr_url}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify protected tap branch
+        if: steps.pull-request.outputs.url != ''
+        run: |
+          set -euo pipefail
+          protection="$(gh api "repos/${TAP_REPOSITORY}/branches/main/protection")"
+          if [ "$(echo "$protection" | jq -r '.enforce_admins.enabled')" != "true" ]; then
+            echo "tap main branch must enforce protection for administrators" >&2
+            exit 1
+          fi
+          if [ "$(echo "$protection" | jq -r '[.required_status_checks.checks[] | select(.context == "validate" and .app_id == 15368)] | length')" != "1" ]; then
+            echo "tap main branch must require the GitHub Actions validate check" >&2
+            exit 1
+          fi
+          test "$(echo "$protection" | jq -r '.required_status_checks.strict')" = "true"
+          test "$(gh api "repos/${TAP_REPOSITORY}" --jq '.allow_auto_merge')" = "true"
+
+      - name: Enable squash auto-merge
+        if: steps.pull-request.outputs.url != ''
+        env:
+          PR_URL: ${{ steps.pull-request.outputs.url }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_URL" --auto --squash
+          for _attempt in $(seq 1 150); do
+            merged_at="$(gh pr view "$PR_URL" --json mergedAt --jq '.mergedAt // ""')"
+            state="$(gh pr view "$PR_URL" --json state --jq '.state')"
+            if [ -n "$merged_at" ]; then
+              echo "tap update merged at ${merged_at}"
+              exit 0
+            fi
+            if [ "$state" = "CLOSED" ]; then
+              echo "tap update pull request closed without merging" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "tap update did not merge before the workflow deadline" >&2
+          exit 1

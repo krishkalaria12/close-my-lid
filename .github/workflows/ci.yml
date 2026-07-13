@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
@@ -43,6 +43,7 @@ jobs:
           ruby -c Casks/close-my-lid.rb
           brew style Formula/close-my-lid.rb
           brew style Casks/close-my-lid.rb
+          ruby scripts/update-homebrew-tap-test.rb
           ruby scripts/validate-release-instructions-test.rb
           ruby scripts/validate-release-instructions.rb
 
