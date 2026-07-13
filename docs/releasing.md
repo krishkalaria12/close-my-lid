@@ -49,5 +49,13 @@ apps/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast \
 
 6. Review the generated feed, replace `appcast.xml`, and run `ruby scripts/validate-appcast.rb` before committing it.
 7. Keep the Homebrew cask version and checksum aligned with the same GitHub Release.
+8. Include complete fresh-install instructions in the release notes. This project is a custom tap hosted in the application repository, so the tap command must include the repository URL and must appear in the same code block as the install command:
+
+```bash
+brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
+brew install --cask krishkalaria12/close-my-lid/close-my-lid
+```
+
+Do not publish the `brew install` command by itself: without the explicit tap command, Homebrew looks for the nonexistent conventional repository `krishkalaria12/homebrew-close-my-lid`. Put upgrade instructions in a separate "Existing installations" section so they cannot be mistaken for fresh-install instructions.
 
 Test the full path from an older installed, Developer ID-signed build. A build of the current version cannot exercise replacement and relaunch.

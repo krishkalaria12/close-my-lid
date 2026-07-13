@@ -43,6 +43,8 @@ jobs:
           ruby -c Casks/close-my-lid.rb
           brew style Formula/close-my-lid.rb
           brew style Casks/close-my-lid.rb
+          ruby scripts/validate-release-instructions-test.rb
+          ruby scripts/validate-release-instructions.rb
 
       - name: Package macOS app
         run: |

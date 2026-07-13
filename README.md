@@ -6,21 +6,17 @@ It ships as a native macOS menu bar app, a `close-my-lid` CLI, a Raycast extensi
 
 ## Install
 
-First, add the Homebrew tap:
+Most users only need the menu bar app. For a fresh install, run both commands:
 
 ```sh
 brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
-```
-
-Most users only need the menu bar app:
-
-```sh
 brew install --cask krishkalaria12/close-my-lid/close-my-lid
 ```
 
 Install the CLI only if you want terminal/script access:
 
 ```sh
+brew tap krishkalaria12/close-my-lid https://github.com/krishkalaria12/close-my-lid
 brew install krishkalaria12/close-my-lid/close-my-lid
 ```
 
