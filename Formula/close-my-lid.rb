@@ -1,9 +1,9 @@
 class CloseMyLid < Formula
   desc "Menu bar app that keeps a Mac awake with the lid closed"
   homepage "https://github.com/krishkalaria12/close-my-lid"
-  url "https://github.com/krishkalaria12/close-my-lid/archive/refs/tags/v0.3.0.tar.gz"
-  version "0.3.0"
-  sha256 "9f33eb088fef9bf7d729e6c9c98eb5f8b8081240838f56df01a0c2826c67afb4"
+  url "https://github.com/krishkalaria12/close-my-lid/archive/refs/tags/v0.4.0.tar.gz"
+  version "0.4.0"
+  sha256 "428586938706b2cf08f768fa6dcc21e08ae4c4b00ca9382f31b2d01cfbe38607"
   license "MIT"
 
   depends_on macos: :sonoma

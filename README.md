@@ -29,11 +29,11 @@ The cask installs `Close My Lid.app` into `/Applications`. The formula installs 
 
 The GitHub release also includes a zipped `.app` bundle:
 
-- [Close My Lid v0.3.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.3.0)
+- [Close My Lid v0.4.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.4.0)
 
 ## Features
 
-- Menu bar controls for 30 minute, 1 hour, 4 hour, and indefinite sessions
+- Menu bar controls for 30 minute, 1 hour, 4 hour, and Unlimited sessions
 - Admin-approved closed-lid sleep hold using `pmset -a disablesleep`
 - Automatic cleanup when a timed session expires or the app quits
 - Low-battery safety release that restores normal sleep at 15% when unplugged
