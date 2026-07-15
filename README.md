@@ -29,7 +29,7 @@ The cask installs `Close My Lid.app` into `/Applications`. The formula installs 
 
 The GitHub release also includes a zipped `.app` bundle:
 
-- [Close My Lid v0.4.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.4.0)
+- [Close My Lid v0.4.1](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.4.1)
 
 ## Features
 
