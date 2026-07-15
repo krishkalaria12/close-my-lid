@@ -275,14 +275,14 @@ struct MenuPanelView: View {
     // MARK: - Hold presets
 
     private var holdSection: some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Hold for")
                 .font(.system(size: 15, weight: .bold))
-            Spacer()
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 holdButton("30 min", .timed(SessionDuration.thirtyMinutes))
                 holdButton("1 hour", .timed(SessionDuration.oneHour))
                 holdButton("4 hours", .timed(SessionDuration.fourHours))
+                holdButton("Unlimited", .indefinitely)
             }
         }
     }
@@ -318,7 +318,7 @@ private struct PillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)

@@ -18,7 +18,7 @@ public enum SessionDuration: Equatable, Sendable {
     public var title: String {
         switch self {
         case .indefinitely:
-            return "Indefinitely"
+            return "Unlimited"
         case .timed(Self.thirtyMinutes):
             return "30 Minutes"
         case .timed(Self.oneHour):

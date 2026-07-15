@@ -13,6 +13,8 @@ final class StatusMenuController: NSObject {
     private var settingsWindowController: SettingsWindowController?
     private var refreshTimer: Timer?
     private var wasActive: Bool
+    private var wakeRestorePending = false
+    private var wakeRestoreReady = false
 
     init(
         sleepController: SleepSessionController,
@@ -44,6 +46,7 @@ final class StatusMenuController: NSObject {
         )
 
         configureStatusItem()
+        observeSystemWake()
         syncSessionState()
         scheduleRefreshTimer()
     }
@@ -75,7 +78,31 @@ final class StatusMenuController: NSObject {
         }
     }
 
+    private func observeSystemWake() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(systemDidWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(systemWillSleep),
+            name: NSWorkspace.willSleepNotification,
+            object: nil
+        )
+    }
+
     private func syncSessionState() {
+        if wakeRestorePending {
+            enforceBatterySafety()
+            if wakeRestoreReady {
+                restorePendingWake()
+            }
+            updateSessionTransition()
+            return
+        }
+
         do {
             try sleepController.syncWithSystem(
                 disableSleepIsEnabled: powerSettingsReader.disableSleepIsEnabled()
@@ -86,9 +113,44 @@ final class StatusMenuController: NSObject {
 
         enforceBatterySafety()
 
+        updateSessionTransition()
+    }
+
+    @objc private func systemDidWake() {
+        wakeRestorePending = sleepController.state.isActive
+        wakeRestoreReady = wakeRestorePending
+        enforceBatterySafety()
+        if wakeRestorePending {
+            restorePendingWake()
+        }
+        updateSessionTransition()
+    }
+
+    @objc private func systemWillSleep() {
+        wakeRestorePending = sleepController.state.isActive
+        wakeRestoreReady = false
+    }
+
+    private func restorePendingWake() {
+        do {
+            try sleepController.restoreAfterWake(
+                disableSleepIsEnabled: powerSettingsReader.disableSleepIsEnabled()
+            )
+            wakeRestorePending = false
+            wakeRestoreReady = false
+        } catch {
+            try? sleepController.stopIfExpired()
+            if !sleepController.state.isActive {
+                wakeRestorePending = false
+                wakeRestoreReady = false
+            }
+        }
+    }
+
+    private func updateSessionTransition() {
         // A timed session's "ended" message is delivered by the system at its
-        // fire date; when the reconciliation timer observes the hold turning
-        // off, clear any remaining pending requests.
+        // fire date; when reconciliation observes the hold turning off, clear
+        // any remaining pending requests.
         let isActive = sleepController.state.isActive
         if wasActive && !isActive {
             notifier.cancelPending()

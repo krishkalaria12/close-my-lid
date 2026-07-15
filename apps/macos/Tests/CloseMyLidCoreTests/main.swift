@@ -10,6 +10,10 @@ struct TestRunner {
         testIndefiniteSessionsHaveNoEndDate()
         testExpiredTimedSessionsRestoreNormalSleep()
         testActiveTimedSessionsAreLeftAloneBeforeExpiry()
+        testWakeRestoresIndefiniteSession()
+        testWakeKeepsUnexpiredTimedSession()
+        testWakeExpiresFinishedTimedSession()
+        testWakeIgnoresInactiveSession()
         testMenuPresetsMatchProductDefaults()
         testStatusCopyRoundsUpRemainingTime()
         testCommandLineActionParser()
@@ -125,6 +129,100 @@ struct TestRunner {
         expect(controller.state.isActive, "active timed sessions stay active before expiry")
     }
 
+    private mutating func testWakeRestoresIndefiniteSession() {
+        let executor = RecordingPowerCommandExecutor()
+        let state = SleepControlState.active(
+            startedAt: Date(timeIntervalSince1970: 100),
+            endsAt: nil
+        )
+        let controller = SleepSessionController(
+            executor: executor,
+            store: InMemorySleepSessionStore(initialState: state)
+        )
+
+        do {
+            try controller.restoreAfterWake(
+                disableSleepIsEnabled: false,
+                now: Date(timeIntervalSince1970: 200)
+            )
+        } catch {
+            failures.append("FAILED: restoring indefinite session after wake threw \(error)")
+            return
+        }
+
+        expect(executor.commands == [true], "wake re-enables an indefinite hold")
+        expect(controller.state == state, "wake preserves the indefinite session")
+    }
+
+    private mutating func testWakeKeepsUnexpiredTimedSession() {
+        let executor = RecordingPowerCommandExecutor()
+        let state = SleepControlState.active(
+            startedAt: Date(timeIntervalSince1970: 100),
+            endsAt: Date(timeIntervalSince1970: 300)
+        )
+        let controller = SleepSessionController(
+            executor: executor,
+            store: InMemorySleepSessionStore(initialState: state)
+        )
+
+        do {
+            try controller.restoreAfterWake(
+                disableSleepIsEnabled: false,
+                now: Date(timeIntervalSince1970: 200)
+            )
+        } catch {
+            failures.append("FAILED: restoring timed session after wake threw \(error)")
+            return
+        }
+
+        expect(executor.commands == [true], "wake re-enables an unexpired timed hold")
+        expect(controller.state == state, "wake preserves an unexpired timed session")
+    }
+
+    private mutating func testWakeExpiresFinishedTimedSession() {
+        let executor = RecordingPowerCommandExecutor()
+        let controller = SleepSessionController(
+            executor: executor,
+            store: InMemorySleepSessionStore(
+                initialState: .active(
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    endsAt: Date(timeIntervalSince1970: 200)
+                )
+            )
+        )
+
+        do {
+            try controller.restoreAfterWake(
+                disableSleepIsEnabled: false,
+                now: Date(timeIntervalSince1970: 201)
+            )
+        } catch {
+            failures.append("FAILED: expiring timed session after wake threw \(error)")
+            return
+        }
+
+        expect(executor.commands == [false], "wake restores normal sleep for an expired hold")
+        expect(controller.state == .inactive, "wake expires a finished timed session")
+    }
+
+    private mutating func testWakeIgnoresInactiveSession() {
+        let executor = RecordingPowerCommandExecutor()
+        let controller = SleepSessionController(
+            executor: executor,
+            store: InMemorySleepSessionStore()
+        )
+
+        do {
+            try controller.restoreAfterWake(disableSleepIsEnabled: false)
+        } catch {
+            failures.append("FAILED: inactive wake handling threw \(error)")
+            return
+        }
+
+        expect(executor.commands.isEmpty, "wake issues no command without an active session")
+        expect(controller.state == .inactive, "wake leaves an inactive session alone")
+    }
+
     private mutating func testMenuPresetsMatchProductDefaults() {
         expect(
             SessionDuration.menuPresets == [
@@ -135,6 +233,7 @@ struct TestRunner {
             ],
             "menu presets match product defaults"
         )
+        expect(SessionDuration.indefinitely.title == "Unlimited", "unlimited preset uses product copy")
     }
 
     private mutating func testStatusCopyRoundsUpRemainingTime() {

@@ -39,6 +39,26 @@ public final class SleepSessionController: ObservableObject {
         try stop()
     }
 
+    /// Reasserts a saved hold after macOS wakes. Power settings can be reset
+    /// during a sleep/wake cycle even though the user's session is still active.
+    public func restoreAfterWake(
+        disableSleepIsEnabled: Bool,
+        now: Date = Date()
+    ) throws {
+        guard case let .active(_, endsAt) = state else {
+            return
+        }
+
+        if let endsAt, endsAt <= now {
+            try stop()
+            return
+        }
+
+        if !disableSleepIsEnabled {
+            try executor.setDisableSleep(true)
+        }
+    }
+
     /// Releases an active hold when the battery has drained to an unsafe level
     /// on battery power. Returns `true` when the hold was released.
     @discardableResult
