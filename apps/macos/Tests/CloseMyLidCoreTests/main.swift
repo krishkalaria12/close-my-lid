@@ -350,17 +350,17 @@ struct TestRunner {
 
     private mutating func testBatterySafetyPolicyDefaults() {
         let policy = BatterySafetyPolicy()
-        expect(policy.threshold == 15, "battery safety threshold defaults to 15 percent")
+        expect(policy.threshold == 5, "battery safety threshold defaults to 5 percent")
         expect(
-            policy.shouldReleaseHold(percentage: 15, isCharging: false),
+            policy.shouldReleaseHold(percentage: 5, isCharging: false),
             "battery at the threshold releases the hold"
         )
         expect(
-            policy.shouldReleaseHold(percentage: 5, isCharging: false),
+            policy.shouldReleaseHold(percentage: 2, isCharging: false),
             "battery below the threshold releases the hold"
         )
         expect(
-            !policy.shouldReleaseHold(percentage: 16, isCharging: false),
+            !policy.shouldReleaseHold(percentage: 6, isCharging: false),
             "battery above the threshold keeps the hold"
         )
     }
@@ -380,7 +380,7 @@ struct TestRunner {
 
         do {
             try controller.start(duration: .indefinitely, now: now)
-            let released = try controller.stopIfBatteryLow(percentage: 10, isCharging: false)
+            let released = try controller.stopIfBatteryLow(percentage: 4, isCharging: false)
             expect(released, "a low battery reports that it released the hold")
         } catch {
             failures.append("FAILED: low battery release threw \(error)")

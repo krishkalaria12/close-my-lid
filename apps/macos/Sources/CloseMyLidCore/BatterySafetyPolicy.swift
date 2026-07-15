@@ -5,7 +5,7 @@ import Foundation
 /// heat, so an unplugged machine that drops below the threshold should return
 /// to normal sleep behavior automatically.
 public struct BatterySafetyPolicy: Equatable, Sendable {
-    public static let defaultThreshold = 15
+    public static let defaultThreshold = 5
 
     /// Battery percentage at or below which an unplugged hold is released.
     public let threshold: Int

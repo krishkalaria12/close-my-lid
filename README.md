@@ -36,7 +36,7 @@ The GitHub release also includes a zipped `.app` bundle:
 - Menu bar controls for 30 minute, 1 hour, 4 hour, and Unlimited sessions
 - Admin-approved closed-lid sleep hold using `pmset -a disablesleep`
 - Automatic cleanup when a timed session expires or the app quits
-- Low-battery safety release that restores normal sleep at 15% when unplugged
+- Low-battery safety release that restores normal sleep at 5% when unplugged
 - Notifications when a hold starts, is about to end, and has ended
 - Launch at Login toggle
 - In-app update checks, installation, and restart
@@ -121,4 +121,4 @@ The canonical packages live in [`krishkalaria12/homebrew-close-my-lid`](https://
 
 ## Safety
 
-Keeping a Mac awake in a bag can create heat and battery risk. Prefer timed sessions when possible so the machine returns to normal sleep behavior automatically. As a backstop, Close My Lid automatically releases the hold and restores normal sleep when the battery drops to 15% while unplugged. A charging Mac carries no battery risk, so holds are left alone while plugged in.
+Keeping a Mac awake in a bag can create heat and battery risk. Prefer timed sessions when possible so the machine returns to normal sleep behavior automatically. As a backstop, Close My Lid automatically releases the hold and restores normal sleep when the battery drops to 5% while unplugged. A charging Mac carries no battery risk, so holds are left alone while plugged in.

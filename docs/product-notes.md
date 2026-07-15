@@ -7,7 +7,7 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 - Native macOS menu bar app.
 - One-click sleep hold sessions: 30 minutes, 1 hour, 4 hours, and indefinite.
 - Automatic cleanup when a timed session expires or the app quits.
-- Low-battery safety release: an active hold is stopped and normal sleep restored when the battery drops to 15% (`BatterySafetyPolicy.defaultThreshold`) on battery power. Charging Macs are left alone. Enforced on the same 30 second reconciliation timer as `pmset` state.
+- Low-battery safety release: an active hold is stopped and normal sleep restored when the battery drops to 5% (`BatterySafetyPolicy.defaultThreshold`) on battery power. Charging Macs are left alone. Enforced on the same 30 second reconciliation timer as `pmset` state.
 - Session notifications: an immediate "started" message plus, for timed sessions, an "ending soon" warning 5 minutes out (`SessionNotificationPlanner.endingSoonLeadTime`) and an "ended" message. The pure `SessionNotificationPlanner` decides timing/copy; `SessionNotificationScheduler` delivers them through `UNUserNotificationCenter`. Scheduled messages are cancelled when a hold is stopped early. The unbundled `swift run` build skips notifications since `UNUserNotificationCenter.current()` requires a bundle identifier.
 - Raycast commands for starting and stopping the same power behavior.
 - The canonical Homebrew formula and cask live in `krishkalaria12/homebrew-close-my-lid`; the in-repository copies are retained temporarily for old custom-tap users.
