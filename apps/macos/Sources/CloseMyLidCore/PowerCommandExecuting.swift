@@ -52,15 +52,16 @@ public struct PasswordlessPowerCommandExecutor: PowerCommandExecuting {
 ///    sudoers drop-in enables — silent, fast, no prompt once provisioned.
 /// 2. On first use (or after the grant was removed), run one elevated script
 ///    that installs the drop-in, validates it with `visudo`, and applies the
-///    setting — all within a single macOS admin dialog.
-/// 3. If installing the drop-in is impossible (managed machine, visudo
-///    refusal), fall back to the classic one-shot elevated `pmset` call so
-///    hold sessions keep working without the convenience grant.
+///    setting — all within a single macOS admin dialog. If validation refuses
+///    the drop-in (managed machine), the same dialog still applies the sleep
+///    setting, so holds keep working without a second prompt.
 public final class AdminShellPowerCommandExecutor: PowerCommandExecuting {
     private let commandRunner: ShellCommandRunner
+    private let passwordlessExecutor: PasswordlessPowerCommandExecutor
 
     public init(commandRunner: ShellCommandRunner = ShellCommandRunner()) {
         self.commandRunner = commandRunner
+        self.passwordlessExecutor = PasswordlessPowerCommandExecutor(commandRunner: commandRunner)
     }
 
     public func setDisableSleep(_ enabled: Bool) throws {
@@ -68,19 +69,11 @@ public final class AdminShellPowerCommandExecutor: PowerCommandExecuting {
             return
         }
 
-        do {
-            try runElevated(
-                SudoersProvisioning.appleScriptPayload(
-                    SudoersProvisioning.installScript(applySetting: enabled)
-                )
+        try runElevated(
+            SudoersProvisioning.appleScriptPayload(
+                SudoersProvisioning.installScript(applySetting: enabled)
             )
-        } catch PowerCommandError.elevationCancelled {
-            throw PowerCommandError.elevationCancelled
-        } catch {
-            // Grant installation refused; degrade to the legacy one-shot
-            // elevation instead of failing the user's action.
-            try runElevated(legacyApplyPayload(enabled))
-        }
+        )
     }
 
     /// Installs only the passwordless grant (no sleep change). Used by the
@@ -105,16 +98,12 @@ public final class AdminShellPowerCommandExecutor: PowerCommandExecuting {
 
     /// Returns true when the passwordless allowlisted command succeeded.
     private func tryPasswordlessApply(_ enabled: Bool) -> Bool {
-        guard
-            let result = try? commandRunner.run(
-                executablePath: "/usr/bin/sudo",
-                arguments: ["-n", "/usr/bin/pmset", "-a", "disablesleep", enabled ? "1" : "0"]
-            )
-        else {
+        do {
+            try passwordlessExecutor.setDisableSleep(enabled)
+            return true
+        } catch {
             return false
         }
-
-        return result.status == 0
     }
 
     @discardableResult
@@ -142,9 +131,5 @@ public final class AdminShellPowerCommandExecutor: PowerCommandExecuting {
         }
 
         return .commandFailed(status: result.status, output: result.output)
-    }
-
-    private func legacyApplyPayload(_ enabled: Bool) -> String {
-        #"do shell script "/usr/bin/pmset -a disablesleep \#(enabled ? "1" : "0")" with administrator privileges"#
     }
 }

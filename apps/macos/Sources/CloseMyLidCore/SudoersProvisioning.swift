@@ -54,11 +54,16 @@ public enum SudoersProvisioning {
         contentsMatchRule(installedContents(fileManager: fileManager))
     }
 
-    /// Builds the AppleScript payload that installs the drop-in with one
-    /// administrator prompt, validates it with `visudo`, applies the requested
-    /// sleep setting as root, and cleans up the temp file if validation fails.
+    /// Builds the AppleScript payload behind a single administrator prompt.
     ///
-    /// Passing `applySetting: nil` installs the grant only (Settings UI).
+    /// The script writes the drop-in to a temp file, validates it with
+    /// `visudo`, and moves it into place. When `applySetting` is set, the
+    /// sleep change runs inside that same elevated script on both the
+    /// validated and refused paths, so a managed machine that rejects the
+    /// drop-in still gets the requested hold without a second password entry.
+    ///
+    /// Passing `applySetting: nil` installs the grant only (Settings UI) and
+    /// exits nonzero when validation refuses the drop-in.
     public static func installScript(applySetting: Bool?) -> String {
         let tempPath = "\(filePath).tmp.\(getpid())"
         var script = [
@@ -68,11 +73,15 @@ public enum SudoersProvisioning {
             "/bin/chmod 444 \(tempPath)",
         ]
 
+        let applyClause = applySetting.map { setting in
+            " && /usr/bin/pmset -a disablesleep \(setting ? 1 : 0)"
+        } ?? ""
+
         script.append(
             "if /usr/sbin/visudo -cf \(tempPath) > /dev/null; then "
-                + "/bin/mv \(tempPath) \(filePath)"
-                + (applySetting == nil ? "" : " && /usr/bin/pmset -a disablesleep \(applySetting! ? 1 : 0)")
-                + "; else /bin/rm -f \(tempPath); exit 1; fi"
+                + "/bin/mv \(tempPath) \(filePath)\(applyClause)"
+                + "; else /bin/rm -f \(tempPath)\(applyClause)\(applySetting == nil ? "; exit 1" : "")"
+                + "; fi"
         )
 
         return script.joined(separator: "; ")

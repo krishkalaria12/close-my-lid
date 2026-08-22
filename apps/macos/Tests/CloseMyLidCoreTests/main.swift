@@ -21,6 +21,7 @@ struct TestRunner {
         testSudoersRuleContentIsExact()
         testSudoersDetectorRejectsLookalikes()
         testInstallScriptValidatesAndApplies()
+        testInstallScriptsAreValidShell()
         testWatchdogActionParses()
         testWatchdogPolicyLeavesLiveHoldAlone()
         testWatchdogPolicyReleasesDeadAppHold()
@@ -374,6 +375,10 @@ struct TestRunner {
             !installOnly.contains("&& /usr/bin/pmset -a disablesleep"),
             "grant-only installation does not change sleep behavior"
         )
+        expect(
+            installOnly.contains("; exit 1; fi"),
+            "grant-only installation fails loudly when visudo refuses the drop-in"
+        )
 
         let applyTrue = SudoersProvisioning.installScript(applySetting: true)
 
@@ -381,6 +386,39 @@ struct TestRunner {
             applyTrue.contains("&& /usr/bin/pmset -a disablesleep 1"),
             "provision-and-apply applies disablesleep 1 as root in the same prompt"
         )
+        expect(
+            applyTrue.components(separatedBy: "&& /usr/bin/pmset -a disablesleep 1").count == 3,
+            "the hold applies on both the validated and refused paths without a second prompt"
+        )
+
+        let applyFalse = SudoersProvisioning.installScript(applySetting: false)
+
+        expect(
+            applyFalse.components(separatedBy: "&& /usr/bin/pmset -a disablesleep 0").count == 3,
+            "releasing also applies on both the validated and refused paths"
+        )
+    }
+
+    private mutating func testInstallScriptsAreValidShell() {
+        for applySetting in [Optional<Bool>.none, true, false] {
+            let script = SudoersProvisioning.installScript(applySetting: applySetting)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-n", "-c", script]
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                failures.append("FAILED: install script could not be syntax-checked: \(error)")
+                continue
+            }
+
+            expect(
+                process.terminationStatus == 0,
+                "generated install script passes sh -n (applySetting: \(String(describing: applySetting)))"
+            )
+        }
     }
 
     private mutating func testWatchdogActionParses() {
