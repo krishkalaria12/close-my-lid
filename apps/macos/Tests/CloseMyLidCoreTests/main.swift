@@ -29,6 +29,7 @@ struct TestRunner {
         testWatchdogRunnerCleansUpWhenSystemAlreadyNormal()
         testWatchdogRunnerLeavesLiveHoldAlone()
         testHeartbeatStoreRoundTrip()
+        testSelectedDurationPersistenceRoundTrip()
         testSessionStateLoadsFromStore()
         testSessionStatePersistsAfterStartAndStop()
         testSessionSyncReflectsExternalEnable()
@@ -536,6 +537,37 @@ struct TestRunner {
         store.remove()
 
         expect(store.load() == nil, "removed heartbeats read back nil")
+    }
+
+    private mutating func testSelectedDurationPersistenceRoundTrip() {
+        let suiteName = "app.closemylid.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = UserDefaultsSelectedDurationStore(defaults: defaults)
+
+        expect(store.load() == .indefinitely, "selected duration defaults to unlimited")
+
+        store.save(.timed(SessionDuration.thirtyMinutes))
+
+        expect(
+            store.load() == .timed(SessionDuration.thirtyMinutes),
+            "a picked duration persists across loads"
+        )
+
+        store.save(.timed(SessionDuration.fourHours))
+        expect(store.load() == .timed(SessionDuration.fourHours), "re-picking a duration overwrites it")
+
+        store.save(.indefinitely)
+        expect(store.load() == .indefinitely, "unlimited persists via its sentinel value")
+
+        let memory = InMemorySelectedDurationStore()
+        memory.save(.timed(60))
+
+        expect(
+            memory.savedDurations == [.indefinitely, .timed(60)],
+            "in-memory duration store records saves"
+        )
     }
 
     private mutating func testSessionStateLoadsFromStore() {
