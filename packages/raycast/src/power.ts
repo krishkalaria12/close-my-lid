@@ -13,7 +13,13 @@ export async function setClosedLidHold(enabled: boolean): Promise<void> {
   // Lid app (`/etc/sudoers.d/close-my-lid`); fall back to the classic admin
   // prompt when the grant is missing.
   try {
-    await execFileAsync(sudoPath, ["-n", pmsetPath, "-a", "disablesleep", value]);
+    await execFileAsync(sudoPath, [
+      "-n",
+      pmsetPath,
+      "-a",
+      "disablesleep",
+      value,
+    ]);
     return;
   } catch {
     // fall through to the elevated path
