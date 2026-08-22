@@ -261,31 +261,54 @@ struct TestRunner {
     }
 
     private mutating func testPowerSettingsParser() {
-        let enabledOutput = """
+        // Real `pmset -g` output shape: leading space, tab-separated columns,
+        // and the `SleepDisabled` key (not `disablesleep`).
+        let enabledOutput =
+            "System-wide power settings:\n"
+            + "Currently in use:\n"
+            + " lowpowermode         0\n"
+            + " SleepDisabled\t\t1\n"
+            + " Sleep On Power Button 1\n"
+            + " hibernatefile        /var/vm/sleepimage\n"
+
+        let disabledOutput =
+            "System-wide power settings:\n"
+            + "Currently in use:\n"
+            + " lowpowermode         0\n"
+            + " SleepDisabled\t\t0\n"
+            + " Sleep On Power Button 1\n"
+
+        expect(
+            PowerSettingsParser.disableSleepIsEnabled(from: enabledOutput),
+            "pmset parser treats SleepDisabled 1 as enabled"
+        )
+        expect(
+            !PowerSettingsParser.disableSleepIsEnabled(from: disabledOutput),
+            "pmset parser treats SleepDisabled 0 as disabled"
+        )
+        expect(
+            !PowerSettingsParser.disableSleepIsEnabled(from: disabledOutput.lowercased()),
+            "pmset parser matches the sleep-disabled key case-insensitively"
+        )
+
+        let legacyEnabledOutput = """
         System-wide power settings:
         Currently in use:
          sleep                1
          disablesleep         1
         """
 
-        let disabledOutput = """
-        System-wide power settings:
-        Currently in use:
-         sleep                1
-         disablesleep         0
-        """
-
         expect(
-            PowerSettingsParser.disableSleepIsEnabled(from: enabledOutput),
-            "pmset parser treats disablesleep 1 as enabled"
-        )
-        expect(
-            !PowerSettingsParser.disableSleepIsEnabled(from: disabledOutput),
-            "pmset parser treats disablesleep 0 as disabled"
+            PowerSettingsParser.disableSleepIsEnabled(from: legacyEnabledOutput),
+            "pmset parser still accepts the legacy disablesleep key"
         )
         expect(
             !PowerSettingsParser.disableSleepIsEnabled(from: "sleep 1"),
-            "pmset parser treats missing disablesleep as disabled"
+            "pmset parser treats a missing sleep-disabled key as disabled"
+        )
+        expect(
+            !PowerSettingsParser.disableSleepIsEnabled(from: " Sleep On Power Button 1"),
+            "pmset parser does not confuse similar keys with SleepDisabled"
         )
     }
 
