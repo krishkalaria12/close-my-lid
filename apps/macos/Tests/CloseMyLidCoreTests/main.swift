@@ -28,6 +28,7 @@ struct TestRunner {
         testWatchdogRunnerReleasesStrandedHold()
         testWatchdogRunnerCleansUpWhenSystemAlreadyNormal()
         testWatchdogRunnerLeavesLiveHoldAlone()
+        testWatchdogRunnerKeepsHeartbeatWhenReleaseFails()
         testHeartbeatStoreRoundTrip()
         testSelectedDurationPersistenceRoundTrip()
         testSessionStateLoadsFromStore()
@@ -510,6 +511,29 @@ struct TestRunner {
             expect(store.load() != nil, "a live hold keeps its heartbeat")
         } catch {
             failures.append("FAILED: watchdog live-hold pass threw \(error)")
+        }
+    }
+
+    private mutating func testWatchdogRunnerKeepsHeartbeatWhenReleaseFails() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+        let now = Date()
+
+        do {
+            try store.write(HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-999)))
+
+            _ = try WatchdogRunner.runOnce(
+                heartbeatStore: store,
+                policy: WatchdogPolicy(livenessInterval: 90, expiryGrace: 120),
+                powerSettingsReader: StubPowerSettingsReader(enabled: true),
+                executor: FailingPowerCommandExecutor(),
+                now: now
+            )
+
+            failures.append("FAILED: a failed watchdog release should surface an error")
+        } catch {
+            expect(store.load() != nil, "a failed release leaves the heartbeat for the next tick")
         }
     }
 
@@ -1035,6 +1059,12 @@ private final class RecordingPowerCommandExecutor: PowerCommandExecuting, @unche
 
     func setDisableSleep(_ enabled: Bool) {
         commands.append(enabled)
+    }
+}
+
+private final class FailingPowerCommandExecutor: PowerCommandExecuting, @unchecked Sendable {
+    func setDisableSleep(_ enabled: Bool) throws {
+        throw PowerCommandError.commandFailed(status: 1, output: "sudo: a password is required")
     }
 }
 

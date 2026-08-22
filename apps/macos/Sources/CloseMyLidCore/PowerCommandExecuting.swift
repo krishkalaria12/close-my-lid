@@ -18,6 +18,32 @@ public enum PowerCommandError: Error, Equatable, LocalizedError {
     }
 }
 
+/// Applies closed-lid sleep settings strictly through the passwordless
+/// allowlisted `sudo -n` command installed by `SudoersProvisioning`.
+///
+/// Never elevates interactively, so it is safe for headless contexts like the
+/// watchdog LaunchAgent: when the grant is missing, releasing fails and leaves
+/// the heartbeat for the next tick instead of spawning an administrator dialog
+/// from a background agent.
+public struct PasswordlessPowerCommandExecutor: PowerCommandExecuting {
+    private let commandRunner: ShellCommandRunner
+
+    public init(commandRunner: ShellCommandRunner = ShellCommandRunner()) {
+        self.commandRunner = commandRunner
+    }
+
+    public func setDisableSleep(_ enabled: Bool) throws {
+        let result = try commandRunner.run(
+            executablePath: "/usr/bin/sudo",
+            arguments: ["-n", "/usr/bin/pmset", "-a", "disablesleep", enabled ? "1" : "0"]
+        )
+
+        guard result.status == 0 else {
+            throw PowerCommandError.commandFailed(status: result.status, output: result.output)
+        }
+    }
+}
+
 /// Applies closed-lid sleep settings with as few administrator prompts as
 /// possible.
 ///

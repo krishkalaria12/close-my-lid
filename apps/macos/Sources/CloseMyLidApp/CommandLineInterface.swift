@@ -47,14 +47,16 @@ enum CommandLineInterface {
     }
 
     /// One dead-man pass for the LaunchAgent. Deliberately silent: launchd
-    /// runs this every minute and output would only fill logs.
+    /// runs this every minute and output would only fill logs. Uses the
+    /// passwordless-only executor so a missing sudoers grant can never spawn
+    /// an administrator dialog from a headless agent.
     private static func runWatchdogPass(powerManager: PmsetPowerManager) -> Int32 {
         do {
             try WatchdogRunner.runOnce(
                 heartbeatStore: HoldHeartbeatStore(),
                 policy: WatchdogPolicy(),
                 powerSettingsReader: powerManager,
-                executor: powerManager
+                executor: PasswordlessPowerCommandExecutor()
             )
             return 0
         } catch {
