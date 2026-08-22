@@ -487,7 +487,16 @@ struct TestRunner {
             return
         }
 
-        expect(controller.state == .inactive, "session sync clears stale active state")
+        expect(controller.state == storedState, "a single disagreeing reading keeps the session")
+
+        do {
+            try controller.syncWithSystem(disableSleepIsEnabled: false)
+        } catch {
+            failures.append("FAILED: second sync stale active state threw \(error)")
+            return
+        }
+
+        expect(controller.state == .inactive, "session sync clears stale active state after two readings")
         expect(store.savedStates.last == .inactive, "session sync persists stale state cleanup")
     }
 
