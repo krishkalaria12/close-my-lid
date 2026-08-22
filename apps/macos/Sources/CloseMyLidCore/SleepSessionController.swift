@@ -8,6 +8,10 @@ public final class SleepSessionController: ObservableObject {
     private let store: SleepSessionStoring
     private let batterySafetyPolicy: BatterySafetyPolicy
 
+    /// Number of consecutive reconciliations that saw the system reporting a
+    /// disabled hold while the stored session is still active.
+    private var externalDisableObservations = 0
+
     public init(
         executor: PowerCommandExecuting,
         store: SleepSessionStoring = UserDefaultsSleepSessionStore(),
@@ -86,12 +90,20 @@ public final class SleepSessionController: ObservableObject {
 
         switch (state.isActive, disableSleepIsEnabled) {
         case (false, true):
+            externalDisableObservations = 0
             state = .active(startedAt: now, endsAt: nil)
             store.save(state)
         case (true, false):
-            clearStoredSession()
+            externalDisableObservations += 1
+            // A single disagreeing reading can be a stale `pmset` view right
+            // after a hold was applied; require confirmation across two polls
+            // before discarding a session the app believes is live.
+            if externalDisableObservations >= 2 {
+                externalDisableObservations = 0
+                clearStoredSession()
+            }
         case (true, true), (false, false):
-            break
+            externalDisableObservations = 0
         }
     }
 

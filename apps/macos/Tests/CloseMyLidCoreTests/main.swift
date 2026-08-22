@@ -18,6 +18,21 @@ struct TestRunner {
         testStatusCopyRoundsUpRemainingTime()
         testCommandLineActionParser()
         testPowerSettingsParser()
+        testSudoersRuleContentIsExact()
+        testSudoersDetectorRejectsLookalikes()
+        testInstallScriptValidatesAndApplies()
+        testInstallScriptsAreValidShell()
+        testWatchdogActionParses()
+        testWatchdogPolicyLeavesLiveHoldAlone()
+        testWatchdogPolicyReleasesDeadAppHold()
+        testWatchdogPolicyReleasesExpiredTimedHold()
+        testWatchdogRunnerReleasesStrandedHold()
+        testWatchdogRunnerCleansUpWhenSystemAlreadyNormal()
+        testWatchdogRunnerLeavesLiveHoldAlone()
+        testWatchdogRunnerKeepsHeartbeatWhenReleaseFails()
+        testHeartbeatStoreRoundTrip()
+        testSelectedDurationPersistenceRoundTrip()
+        testSelectedDurationTreatsNonPositiveSecondsAsUnlimited()
         testSessionStateLoadsFromStore()
         testSessionStatePersistsAfterStartAndStop()
         testSessionSyncReflectsExternalEnable()
@@ -261,31 +276,383 @@ struct TestRunner {
     }
 
     private mutating func testPowerSettingsParser() {
-        let enabledOutput = """
+        // Real `pmset -g` output shape: leading space, tab-separated columns,
+        // and the `SleepDisabled` key (not `disablesleep`).
+        let enabledOutput =
+            "System-wide power settings:\n"
+            + "Currently in use:\n"
+            + " lowpowermode         0\n"
+            + " SleepDisabled\t\t1\n"
+            + " Sleep On Power Button 1\n"
+            + " hibernatefile        /var/vm/sleepimage\n"
+
+        let disabledOutput =
+            "System-wide power settings:\n"
+            + "Currently in use:\n"
+            + " lowpowermode         0\n"
+            + " SleepDisabled\t\t0\n"
+            + " Sleep On Power Button 1\n"
+
+        expect(
+            PowerSettingsParser.disableSleepIsEnabled(from: enabledOutput),
+            "pmset parser treats SleepDisabled 1 as enabled"
+        )
+        expect(
+            !PowerSettingsParser.disableSleepIsEnabled(from: disabledOutput),
+            "pmset parser treats SleepDisabled 0 as disabled"
+        )
+        expect(
+            !PowerSettingsParser.disableSleepIsEnabled(from: disabledOutput.lowercased()),
+            "pmset parser matches the sleep-disabled key case-insensitively"
+        )
+
+        let legacyEnabledOutput = """
         System-wide power settings:
         Currently in use:
          sleep                1
          disablesleep         1
         """
 
-        let disabledOutput = """
-        System-wide power settings:
-        Currently in use:
-         sleep                1
-         disablesleep         0
-        """
-
         expect(
-            PowerSettingsParser.disableSleepIsEnabled(from: enabledOutput),
-            "pmset parser treats disablesleep 1 as enabled"
-        )
-        expect(
-            !PowerSettingsParser.disableSleepIsEnabled(from: disabledOutput),
-            "pmset parser treats disablesleep 0 as disabled"
+            PowerSettingsParser.disableSleepIsEnabled(from: legacyEnabledOutput),
+            "pmset parser still accepts the legacy disablesleep key"
         )
         expect(
             !PowerSettingsParser.disableSleepIsEnabled(from: "sleep 1"),
-            "pmset parser treats missing disablesleep as disabled"
+            "pmset parser treats a missing sleep-disabled key as disabled"
+        )
+        expect(
+            !PowerSettingsParser.disableSleepIsEnabled(from: " Sleep On Power Button 1"),
+            "pmset parser does not confuse similar keys with SleepDisabled"
+        )
+    }
+
+    private mutating func testSudoersRuleContentIsExact() {
+        let contents = SudoersProvisioning.desiredFileContents
+
+        expect(
+            contents.contains(SudoersProvisioning.ruleLine),
+            "desired sudoers file contains the exact rule line"
+        )
+        expect(
+            contents.contains(SudoersProvisioning.commentLine),
+            "desired sudoers file carries an identifying comment"
+        )
+        expect(
+            !SudoersProvisioning.ruleLine.contains("*"),
+            "sudoers rule avoids wildcard arguments"
+        )
+        expect(
+            SudoersProvisioning.contentsMatchRule("\n\(SudoersProvisioning.ruleLine)\n"),
+            "detector matches the exact rule line"
+        )
+    }
+
+    private mutating func testSudoersDetectorRejectsLookalikes() {
+        let partialGrant = "%admin ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1"
+
+        expect(
+            !SudoersProvisioning.contentsMatchRule(partialGrant),
+            "a single-command grant is not treated as fully installed"
+        )
+        expect(
+            !SudoersProvisioning.contentsMatchRule(""),
+            "an empty file is not installed"
+        )
+        expect(
+            !SudoersProvisioning.contentsMatchRule(nil),
+            "a missing file is not installed"
+        )
+    }
+
+    private mutating func testInstallScriptValidatesAndApplies() {
+        let installOnly = SudoersProvisioning.installScript(applySetting: nil)
+
+        expect(
+            installOnly.contains("/usr/sbin/visudo -cf"),
+            "install validates the drop-in with visudo before moving it into place"
+        )
+        expect(
+            !installOnly.contains("&& /usr/bin/pmset -a disablesleep"),
+            "grant-only installation does not change sleep behavior"
+        )
+        expect(
+            installOnly.contains("; exit 1; fi"),
+            "grant-only installation fails loudly when visudo refuses the drop-in"
+        )
+
+        let applyTrue = SudoersProvisioning.installScript(applySetting: true)
+
+        expect(
+            applyTrue.contains("&& /usr/bin/pmset -a disablesleep 1"),
+            "provision-and-apply applies disablesleep 1 as root in the same prompt"
+        )
+        expect(
+            applyTrue.components(separatedBy: "&& /usr/bin/pmset -a disablesleep 1").count == 3,
+            "the hold applies on both the validated and refused paths without a second prompt"
+        )
+
+        let applyFalse = SudoersProvisioning.installScript(applySetting: false)
+
+        expect(
+            applyFalse.components(separatedBy: "&& /usr/bin/pmset -a disablesleep 0").count == 3,
+            "releasing also applies on both the validated and refused paths"
+        )
+    }
+
+    private mutating func testInstallScriptsAreValidShell() {
+        for applySetting in [Optional<Bool>.none, true, false] {
+            let script = SudoersProvisioning.installScript(applySetting: applySetting)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-n", "-c", script]
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                failures.append("FAILED: install script could not be syntax-checked: \(error)")
+                continue
+            }
+
+            expect(
+                process.terminationStatus == 0,
+                "generated install script passes sh -n (applySetting: \(String(describing: applySetting)))"
+            )
+        }
+    }
+
+    private mutating func testWatchdogActionParses() {
+        expect(
+            CommandLineActionParser.parse(["--watchdog"]) == .watchdog,
+            "hidden watchdog flag parses"
+        )
+    }
+
+    private mutating func testWatchdogPolicyLeavesLiveHoldAlone() {
+        let policy = WatchdogPolicy(livenessInterval: 90, expiryGrace: 120)
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        expect(
+            !policy.shouldReleaseHold(heartbeat: nil, now: now),
+            "no heartbeat means nothing to release"
+        )
+
+        let freshUnlimited = HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-30))
+
+        expect(
+            !policy.shouldReleaseHold(heartbeat: freshUnlimited, now: now),
+            "a freshly refreshed unlimited hold is left alone"
+        )
+
+        let unexpiredTimed = HoldHeartbeat(endsAt: now.addingTimeInterval(-119), updatedAt: now)
+
+        expect(
+            !policy.shouldReleaseHold(heartbeat: unexpiredTimed, now: now),
+            "a timed hold inside its expiry grace is left alone"
+        )
+    }
+
+    private mutating func testWatchdogPolicyReleasesDeadAppHold() {
+        let policy = WatchdogPolicy(livenessInterval: 90, expiryGrace: 120)
+        let now = Date(timeIntervalSince1970: 10_000)
+        let stale = HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-91))
+
+        expect(
+            policy.shouldReleaseHold(heartbeat: stale, now: now),
+            "a hold whose heartbeat went stale is released"
+        )
+    }
+
+    private mutating func testWatchdogPolicyReleasesExpiredTimedHold() {
+        let policy = WatchdogPolicy(livenessInterval: 90, expiryGrace: 120)
+        let now = Date(timeIntervalSince1970: 10_000)
+        let expired = HoldHeartbeat(endsAt: now.addingTimeInterval(-121), updatedAt: now)
+
+        expect(
+            policy.shouldReleaseHold(heartbeat: expired, now: now),
+            "a timed hold past its expiry grace is released even while fresh"
+        )
+    }
+
+    private mutating func testWatchdogRunnerReleasesStrandedHold() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+        let executor = RecordingPowerCommandExecutor()
+        let now = Date()
+
+        do {
+            try store.write(HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-999)))
+
+            let released = try WatchdogRunner.runOnce(
+                heartbeatStore: store,
+                policy: WatchdogPolicy(livenessInterval: 90, expiryGrace: 120),
+                powerSettingsReader: StubPowerSettingsReader(enabled: true),
+                executor: executor,
+                now: now
+            )
+
+            expect(released, "the watchdog releases a stranded hold")
+            expect(executor.commands == [false], "release restores normal sleep")
+            expect(store.load() == nil, "release clears the stale heartbeat")
+        } catch {
+            failures.append("FAILED: watchdog stranded release threw \(error)")
+        }
+    }
+
+    private mutating func testWatchdogRunnerCleansUpWhenSystemAlreadyNormal() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+        let executor = RecordingPowerCommandExecutor()
+        let now = Date()
+
+        do {
+            try store.write(HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-999)))
+
+            let released = try WatchdogRunner.runOnce(
+                heartbeatStore: store,
+                policy: WatchdogPolicy(livenessInterval: 90, expiryGrace: 120),
+                powerSettingsReader: StubPowerSettingsReader(enabled: false),
+                executor: executor,
+                now: now
+            )
+
+            expect(!released, "no release is needed when sleep is already normal")
+            expect(executor.commands.isEmpty, "no pmset command runs when sleep is already normal")
+            expect(store.load() == nil, "stale heartbeats are cleaned up either way")
+        } catch {
+            failures.append("FAILED: watchdog cleanup pass threw \(error)")
+        }
+    }
+
+    private mutating func testWatchdogRunnerLeavesLiveHoldAlone() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+        let executor = RecordingPowerCommandExecutor()
+        let now = Date()
+
+        do {
+            try store.write(HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-10)))
+
+            let released = try WatchdogRunner.runOnce(
+                heartbeatStore: store,
+                policy: WatchdogPolicy(livenessInterval: 90, expiryGrace: 120),
+                powerSettingsReader: StubPowerSettingsReader(enabled: true),
+                executor: executor,
+                now: now
+            )
+
+            expect(!released, "a live app's hold is untouched")
+            expect(executor.commands.isEmpty, "a live app's hold triggers no commands")
+            expect(store.load() != nil, "a live hold keeps its heartbeat")
+        } catch {
+            failures.append("FAILED: watchdog live-hold pass threw \(error)")
+        }
+    }
+
+    private mutating func testWatchdogRunnerKeepsHeartbeatWhenReleaseFails() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+        let now = Date()
+
+        do {
+            try store.write(HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-999)))
+
+            _ = try WatchdogRunner.runOnce(
+                heartbeatStore: store,
+                policy: WatchdogPolicy(livenessInterval: 90, expiryGrace: 120),
+                powerSettingsReader: StubPowerSettingsReader(enabled: true),
+                executor: FailingPowerCommandExecutor(),
+                now: now
+            )
+
+            failures.append("FAILED: a failed watchdog release should surface an error")
+        } catch {
+            expect(store.load() != nil, "a failed release leaves the heartbeat for the next tick")
+        }
+    }
+
+    private mutating func testHeartbeatStoreRoundTrip() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+
+        expect(store.load() == nil, "a missing heartbeat reads back nil")
+
+        do {
+            let endsAt = Date(timeIntervalSince1970: 5_000)
+            let updatedAt = Date(timeIntervalSince1970: 4_000)
+            try store.write(HoldHeartbeat(endsAt: endsAt, updatedAt: updatedAt))
+
+            expect(
+                store.load() == HoldHeartbeat(endsAt: endsAt, updatedAt: updatedAt),
+                "heartbeat round-trips through disk"
+            )
+        } catch {
+            failures.append("FAILED: heartbeat round-trip threw \(error)")
+            return
+        }
+
+        store.remove()
+
+        expect(store.load() == nil, "removed heartbeats read back nil")
+    }
+
+    private mutating func testSelectedDurationPersistenceRoundTrip() {
+        let suiteName = "app.closemylid.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = UserDefaultsSelectedDurationStore(defaults: defaults)
+
+        expect(store.load() == .indefinitely, "selected duration defaults to unlimited")
+
+        store.save(.timed(SessionDuration.thirtyMinutes))
+
+        expect(
+            store.load() == .timed(SessionDuration.thirtyMinutes),
+            "a picked duration persists across loads"
+        )
+
+        store.save(.timed(SessionDuration.fourHours))
+        expect(store.load() == .timed(SessionDuration.fourHours), "re-picking a duration overwrites it")
+
+        store.save(.indefinitely)
+        expect(store.load() == .indefinitely, "unlimited persists via its sentinel value")
+
+        let memory = InMemorySelectedDurationStore()
+        memory.save(.timed(60))
+
+        expect(
+            memory.savedDurations == [.indefinitely, .timed(60)],
+            "in-memory duration store records saves"
+        )
+    }
+
+    private mutating func testSelectedDurationTreatsNonPositiveSecondsAsUnlimited() {
+        let suiteName = "app.closemylid.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let key = "app.closemylid.tests.selected-duration"
+        let store = UserDefaultsSelectedDurationStore(defaults: defaults, key: key)
+
+        defaults.set(0.0, forKey: key)
+
+        expect(
+            store.load() == .indefinitely,
+            "a corrupt zero-second duration loads as unlimited instead of an instant expiry"
+        )
+
+        defaults.set(-30.0, forKey: key)
+
+        expect(
+            store.load() == .indefinitely,
+            "a negative duration loads as unlimited"
         )
     }
 
@@ -464,7 +831,16 @@ struct TestRunner {
             return
         }
 
-        expect(controller.state == .inactive, "session sync clears stale active state")
+        expect(controller.state == storedState, "a single disagreeing reading keeps the session")
+
+        do {
+            try controller.syncWithSystem(disableSleepIsEnabled: false)
+        } catch {
+            failures.append("FAILED: second sync stale active state threw \(error)")
+            return
+        }
+
+        expect(controller.state == .inactive, "session sync clears stale active state after two readings")
         expect(store.savedStates.last == .inactive, "session sync persists stale state cleanup")
     }
 
@@ -745,6 +1121,28 @@ private final class RecordingPowerCommandExecutor: PowerCommandExecuting, @unche
 
     func setDisableSleep(_ enabled: Bool) {
         commands.append(enabled)
+    }
+}
+
+private final class FailingPowerCommandExecutor: PowerCommandExecuting, @unchecked Sendable {
+    func setDisableSleep(_ enabled: Bool) throws {
+        throw PowerCommandError.commandFailed(status: 1, output: "sudo: a password is required")
+    }
+}
+
+private final class StubPowerSettingsReader: PowerSettingsReading, @unchecked Sendable {
+    private let enabled: Bool
+
+    init(enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    func disableSleepIsEnabled() throws -> Bool {
+        enabled
+    }
+
+    func disableSleepIsEnabledAsync() async throws -> Bool {
+        enabled
     }
 }
 
