@@ -18,6 +18,9 @@ struct TestRunner {
         testStatusCopyRoundsUpRemainingTime()
         testCommandLineActionParser()
         testPowerSettingsParser()
+        testSudoersRuleContentIsExact()
+        testSudoersDetectorRejectsLookalikes()
+        testInstallScriptValidatesAndApplies()
         testSessionStateLoadsFromStore()
         testSessionStatePersistsAfterStartAndStop()
         testSessionSyncReflectsExternalEnable()
@@ -309,6 +312,64 @@ struct TestRunner {
         expect(
             !PowerSettingsParser.disableSleepIsEnabled(from: " Sleep On Power Button 1"),
             "pmset parser does not confuse similar keys with SleepDisabled"
+        )
+    }
+
+    private mutating func testSudoersRuleContentIsExact() {
+        let contents = SudoersProvisioning.desiredFileContents
+
+        expect(
+            contents.contains(SudoersProvisioning.ruleLine),
+            "desired sudoers file contains the exact rule line"
+        )
+        expect(
+            contents.contains(SudoersProvisioning.commentLine),
+            "desired sudoers file carries an identifying comment"
+        )
+        expect(
+            !SudoersProvisioning.ruleLine.contains("*"),
+            "sudoers rule avoids wildcard arguments"
+        )
+        expect(
+            SudoersProvisioning.contentsMatchRule("\n\(SudoersProvisioning.ruleLine)\n"),
+            "detector matches the exact rule line"
+        )
+    }
+
+    private mutating func testSudoersDetectorRejectsLookalikes() {
+        let partialGrant = "%admin ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1"
+
+        expect(
+            !SudoersProvisioning.contentsMatchRule(partialGrant),
+            "a single-command grant is not treated as fully installed"
+        )
+        expect(
+            !SudoersProvisioning.contentsMatchRule(""),
+            "an empty file is not installed"
+        )
+        expect(
+            !SudoersProvisioning.contentsMatchRule(nil),
+            "a missing file is not installed"
+        )
+    }
+
+    private mutating func testInstallScriptValidatesAndApplies() {
+        let installOnly = SudoersProvisioning.installScript(applySetting: nil)
+
+        expect(
+            installOnly.contains("/usr/sbin/visudo -cf"),
+            "install validates the drop-in with visudo before moving it into place"
+        )
+        expect(
+            !installOnly.contains("&& /usr/bin/pmset -a disablesleep"),
+            "grant-only installation does not change sleep behavior"
+        )
+
+        let applyTrue = SudoersProvisioning.installScript(applySetting: true)
+
+        expect(
+            applyTrue.contains("&& /usr/bin/pmset -a disablesleep 1"),
+            "provision-and-apply applies disablesleep 1 as root in the same prompt"
         )
     }
 
