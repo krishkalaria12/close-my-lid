@@ -35,7 +35,10 @@ The GitHub release also includes a zipped `.app` bundle:
 
 - Menu bar controls for 30 minute, 1 hour, 4 hour, and Unlimited sessions
 - Admin-approved closed-lid sleep hold using `pmset -a disablesleep`
-- Automatic cleanup when a timed session expires or the app quits
+- One-time passwordless grant: a single admin prompt installs a tightly scoped sudoers allowlist so holds start, end, and restore without ever asking for your password again
+- The ON/OFF toggle remembers the last duration you picked instead of always starting Unlimited
+- Automatic cleanup when a timed session expires or the app quits, with an exact end-of-session timer
+- Dead-man watchdog LaunchAgent that restores normal sleep if the app crashes while a hold is active
 - Low-battery safety release that restores normal sleep at 5% when unplugged
 - Notifications when a hold starts, is about to end, and has ended
 - Launch at Login toggle

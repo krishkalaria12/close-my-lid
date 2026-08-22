@@ -20,7 +20,7 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 
 ## Implementation Notes
 
-macOS idle sleep assertions are not enough for the closed-lid use case. The app currently uses:
+macOS idle sleep assertions are not enough for the closed-lid use case. The app uses:
 
 ```sh
 pmset -a disablesleep 1
@@ -32,7 +32,11 @@ and restores the setting with:
 pmset -a disablesleep 0
 ```
 
-Those commands require administrator approval. The first implementation runs them through `osascript` so the user gets the normal macOS admin prompt. A future production build should replace this with a privileged helper installed through SMAppService.
+Those commands require administrator approval. Rather than prompting on every hold change, Close My Lid installs a tightly scoped `sudoers` drop-in (`/etc/sudoers.d/close-my-lid`) during a single admin prompt. The drop-in allowlists exactly `pmset -a disablesleep 1` and `pmset -a disablesleep 0` for the admin group — no wildcards — after which every start, stop, expiry release, wake restore, and quit cleanup runs passwordless via `sudo -n`. If the drop-in cannot be installed (managed machines), the app falls back to the classic per-action elevation so holds still work. The Settings window exposes the grant under Administrator Access with install/remove controls.
+
+`disablesleep` persists in power-management preferences across process death and reboots, so a crashed or force-quit app would otherwise leave a Mac unable to sleep forever. A dead-man watchdog LaunchAgent (`app.closemylid.watchdog`, self-managed in `~/Library/LaunchAgents`) runs this binary with `--watchdog` every 60 seconds: while holding, the app refreshes a heartbeat file; if the heartbeat goes stale past three minutes or a timed session outlives its end plus two minutes of grace, the watchdog releases the hold via the same passwordless command. The agent is installed only once the sudoers grant exists.
+
+State reading parses `pmset -g` for the `SleepDisabled` key (case-insensitive, legacy `disablesleep` accepted). Note that `pmset -g` reports `SleepDisabled`, not `disablesleep`; matching only the latter silently disables reconciliation, which previously made the UI flip itself off while the system-wide hold stayed on.
 
 ## Agent Session Detection
 
