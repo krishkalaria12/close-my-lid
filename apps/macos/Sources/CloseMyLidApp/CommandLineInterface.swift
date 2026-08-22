@@ -37,9 +37,29 @@ enum CommandLineInterface {
             case .version:
                 print("Close My Lid \(version)")
                 return 0
+            case .watchdog:
+                return runWatchdogPass(powerManager: powerManager)
             }
         } catch {
             print("close-my-lid: \(error.localizedDescription)")
+            return 1
+        }
+    }
+
+    /// One dead-man pass for the LaunchAgent. Deliberately silent: launchd
+    /// runs this every minute and output would only fill logs.
+    private static func runWatchdogPass(powerManager: PmsetPowerManager) -> Int32 {
+        do {
+            try WatchdogRunner.runOnce(
+                heartbeatStore: HoldHeartbeatStore(),
+                policy: WatchdogPolicy(),
+                powerSettingsReader: powerManager,
+                executor: powerManager
+            )
+            return 0
+        } catch {
+            // Leave the heartbeat for the next tick; a transient failure
+            // should not strand or spam.
             return 1
         }
     }

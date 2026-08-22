@@ -5,6 +5,8 @@ public enum CommandLineAction: Equatable, Sendable {
     case status
     case help
     case version
+    /// Headless dead-man check run by the watchdog LaunchAgent.
+    case watchdog
 }
 
 public enum CommandLineActionParser {
@@ -24,6 +26,9 @@ public enum CommandLineActionParser {
             return .help
         case "version", "--version", "-v":
             return .version
+        // Hidden flag: invoked by the watchdog LaunchAgent only.
+        case "--watchdog":
+            return .watchdog
         default:
             return nil
         }

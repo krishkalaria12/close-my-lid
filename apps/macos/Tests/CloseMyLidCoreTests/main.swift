@@ -21,6 +21,14 @@ struct TestRunner {
         testSudoersRuleContentIsExact()
         testSudoersDetectorRejectsLookalikes()
         testInstallScriptValidatesAndApplies()
+        testWatchdogActionParses()
+        testWatchdogPolicyLeavesLiveHoldAlone()
+        testWatchdogPolicyReleasesDeadAppHold()
+        testWatchdogPolicyReleasesExpiredTimedHold()
+        testWatchdogRunnerReleasesStrandedHold()
+        testWatchdogRunnerCleansUpWhenSystemAlreadyNormal()
+        testWatchdogRunnerLeavesLiveHoldAlone()
+        testHeartbeatStoreRoundTrip()
         testSessionStateLoadsFromStore()
         testSessionStatePersistsAfterStartAndStop()
         testSessionSyncReflectsExternalEnable()
@@ -371,6 +379,163 @@ struct TestRunner {
             applyTrue.contains("&& /usr/bin/pmset -a disablesleep 1"),
             "provision-and-apply applies disablesleep 1 as root in the same prompt"
         )
+    }
+
+    private mutating func testWatchdogActionParses() {
+        expect(
+            CommandLineActionParser.parse(["--watchdog"]) == .watchdog,
+            "hidden watchdog flag parses"
+        )
+    }
+
+    private mutating func testWatchdogPolicyLeavesLiveHoldAlone() {
+        let policy = WatchdogPolicy(livenessInterval: 90, expiryGrace: 120)
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        expect(
+            !policy.shouldReleaseHold(heartbeat: nil, now: now),
+            "no heartbeat means nothing to release"
+        )
+
+        let freshUnlimited = HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-30))
+
+        expect(
+            !policy.shouldReleaseHold(heartbeat: freshUnlimited, now: now),
+            "a freshly refreshed unlimited hold is left alone"
+        )
+
+        let unexpiredTimed = HoldHeartbeat(endsAt: now.addingTimeInterval(-119), updatedAt: now)
+
+        expect(
+            !policy.shouldReleaseHold(heartbeat: unexpiredTimed, now: now),
+            "a timed hold inside its expiry grace is left alone"
+        )
+    }
+
+    private mutating func testWatchdogPolicyReleasesDeadAppHold() {
+        let policy = WatchdogPolicy(livenessInterval: 90, expiryGrace: 120)
+        let now = Date(timeIntervalSince1970: 10_000)
+        let stale = HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-91))
+
+        expect(
+            policy.shouldReleaseHold(heartbeat: stale, now: now),
+            "a hold whose heartbeat went stale is released"
+        )
+    }
+
+    private mutating func testWatchdogPolicyReleasesExpiredTimedHold() {
+        let policy = WatchdogPolicy(livenessInterval: 90, expiryGrace: 120)
+        let now = Date(timeIntervalSince1970: 10_000)
+        let expired = HoldHeartbeat(endsAt: now.addingTimeInterval(-121), updatedAt: now)
+
+        expect(
+            policy.shouldReleaseHold(heartbeat: expired, now: now),
+            "a timed hold past its expiry grace is released even while fresh"
+        )
+    }
+
+    private mutating func testWatchdogRunnerReleasesStrandedHold() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+        let executor = RecordingPowerCommandExecutor()
+        let now = Date()
+
+        do {
+            try store.write(HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-999)))
+
+            let released = try WatchdogRunner.runOnce(
+                heartbeatStore: store,
+                policy: WatchdogPolicy(livenessInterval: 90, expiryGrace: 120),
+                powerSettingsReader: StubPowerSettingsReader(enabled: true),
+                executor: executor,
+                now: now
+            )
+
+            expect(released, "the watchdog releases a stranded hold")
+            expect(executor.commands == [false], "release restores normal sleep")
+            expect(store.load() == nil, "release clears the stale heartbeat")
+        } catch {
+            failures.append("FAILED: watchdog stranded release threw \(error)")
+        }
+    }
+
+    private mutating func testWatchdogRunnerCleansUpWhenSystemAlreadyNormal() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+        let executor = RecordingPowerCommandExecutor()
+        let now = Date()
+
+        do {
+            try store.write(HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-999)))
+
+            let released = try WatchdogRunner.runOnce(
+                heartbeatStore: store,
+                policy: WatchdogPolicy(livenessInterval: 90, expiryGrace: 120),
+                powerSettingsReader: StubPowerSettingsReader(enabled: false),
+                executor: executor,
+                now: now
+            )
+
+            expect(!released, "no release is needed when sleep is already normal")
+            expect(executor.commands.isEmpty, "no pmset command runs when sleep is already normal")
+            expect(store.load() == nil, "stale heartbeats are cleaned up either way")
+        } catch {
+            failures.append("FAILED: watchdog cleanup pass threw \(error)")
+        }
+    }
+
+    private mutating func testWatchdogRunnerLeavesLiveHoldAlone() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+        let executor = RecordingPowerCommandExecutor()
+        let now = Date()
+
+        do {
+            try store.write(HoldHeartbeat(endsAt: nil, updatedAt: now.addingTimeInterval(-10)))
+
+            let released = try WatchdogRunner.runOnce(
+                heartbeatStore: store,
+                policy: WatchdogPolicy(livenessInterval: 90, expiryGrace: 120),
+                powerSettingsReader: StubPowerSettingsReader(enabled: true),
+                executor: executor,
+                now: now
+            )
+
+            expect(!released, "a live app's hold is untouched")
+            expect(executor.commands.isEmpty, "a live app's hold triggers no commands")
+            expect(store.load() != nil, "a live hold keeps its heartbeat")
+        } catch {
+            failures.append("FAILED: watchdog live-hold pass threw \(error)")
+        }
+    }
+
+    private mutating func testHeartbeatStoreRoundTrip() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HoldHeartbeatStore(directory: directory)
+
+        expect(store.load() == nil, "a missing heartbeat reads back nil")
+
+        do {
+            let endsAt = Date(timeIntervalSince1970: 5_000)
+            let updatedAt = Date(timeIntervalSince1970: 4_000)
+            try store.write(HoldHeartbeat(endsAt: endsAt, updatedAt: updatedAt))
+
+            expect(
+                store.load() == HoldHeartbeat(endsAt: endsAt, updatedAt: updatedAt),
+                "heartbeat round-trips through disk"
+            )
+        } catch {
+            failures.append("FAILED: heartbeat round-trip threw \(error)")
+            return
+        }
+
+        store.remove()
+
+        expect(store.load() == nil, "removed heartbeats read back nil")
     }
 
     private mutating func testSessionStateLoadsFromStore() {
@@ -838,6 +1003,22 @@ private final class RecordingPowerCommandExecutor: PowerCommandExecuting, @unche
 
     func setDisableSleep(_ enabled: Bool) {
         commands.append(enabled)
+    }
+}
+
+private final class StubPowerSettingsReader: PowerSettingsReading, @unchecked Sendable {
+    private let enabled: Bool
+
+    init(enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    func disableSleepIsEnabled() throws -> Bool {
+        enabled
+    }
+
+    func disableSleepIsEnabledAsync() async throws -> Bool {
+        enabled
     }
 }
 
