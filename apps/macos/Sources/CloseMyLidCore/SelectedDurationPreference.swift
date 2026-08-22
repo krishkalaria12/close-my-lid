@@ -20,11 +20,11 @@ public final class UserDefaultsSelectedDurationStore: SelectedDurationStoring, @
     }
 
     public func load() -> SessionDuration {
-        guard let seconds = defaults.object(forKey: key) as? Double else {
+        guard let seconds = defaults.object(forKey: key) as? Double, seconds > 0 else {
             return .indefinitely
         }
 
-        return seconds < 0 ? .indefinitely : .timed(seconds)
+        return .timed(seconds)
     }
 
     public func save(_ duration: SessionDuration) {

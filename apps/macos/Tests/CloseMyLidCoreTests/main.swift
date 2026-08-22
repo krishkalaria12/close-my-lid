@@ -32,6 +32,7 @@ struct TestRunner {
         testWatchdogRunnerKeepsHeartbeatWhenReleaseFails()
         testHeartbeatStoreRoundTrip()
         testSelectedDurationPersistenceRoundTrip()
+        testSelectedDurationTreatsNonPositiveSecondsAsUnlimited()
         testSessionStateLoadsFromStore()
         testSessionStatePersistsAfterStartAndStop()
         testSessionSyncReflectsExternalEnable()
@@ -629,6 +630,29 @@ struct TestRunner {
         expect(
             memory.savedDurations == [.indefinitely, .timed(60)],
             "in-memory duration store records saves"
+        )
+    }
+
+    private mutating func testSelectedDurationTreatsNonPositiveSecondsAsUnlimited() {
+        let suiteName = "app.closemylid.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let key = "app.closemylid.tests.selected-duration"
+        let store = UserDefaultsSelectedDurationStore(defaults: defaults, key: key)
+
+        defaults.set(0.0, forKey: key)
+
+        expect(
+            store.load() == .indefinitely,
+            "a corrupt zero-second duration loads as unlimited instead of an instant expiry"
+        )
+
+        defaults.set(-30.0, forKey: key)
+
+        expect(
+            store.load() == .indefinitely,
+            "a negative duration loads as unlimited"
         )
     }
 
