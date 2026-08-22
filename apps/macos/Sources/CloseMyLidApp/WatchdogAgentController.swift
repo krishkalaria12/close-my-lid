@@ -62,8 +62,15 @@ final class WatchdogAgentController {
         try? fileManager.removeItem(at: plistURL)
     }
 
+    /// Bundled apps only: development binaries under `.build` are rebuilt and
+    /// deleted freely, which would leave the agent pointing at a missing
+    /// executable.
     private var resolvedExecutablePath: String? {
-        Bundle.main.executableURL?.path
+        guard Bundle.main.bundlePath.hasSuffix(".app") else {
+            return nil
+        }
+
+        return Bundle.main.executableURL?.path
     }
 
     private func bootout() {
