@@ -4,7 +4,7 @@ import Foundation
 
 @MainActor
 enum CommandLineInterface {
-    static let version = "0.4.3"
+    static let version = "0.4.4"
 
     static func run(arguments: [String]) -> Int32 {
         guard let action = CommandLineActionParser.parse(arguments) else {
