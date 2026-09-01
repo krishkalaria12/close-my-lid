@@ -1,12 +1,13 @@
 /// A coding agent CLI whose running sessions Close My Lid can detect.
 ///
-/// The raw value is the name the harness executable carries in the process
-/// table, so `AgentHarness(rawValue: executableName)` doubles as the match.
+/// The raw value is the primary executable name for the harness. Some
+/// products expose more than one process name, so use `matching(executableName:)`
+/// when classifying a process.
 public enum AgentHarness: String, CaseIterable, Sendable {
     case claudeCode = "claude"
     case codex
     case openCode = "opencode"
-    case gemini
+    case antigravity = "agy"
     case copilot
     case cursor = "cursor-agent"
     case pi
@@ -19,8 +20,8 @@ public enum AgentHarness: String, CaseIterable, Sendable {
             "OpenAI Codex CLI"
         case .openCode:
             "OpenCode"
-        case .gemini:
-            "Gemini CLI"
+        case .antigravity:
+            "Antigravity"
         case .copilot:
             "GitHub Copilot CLI"
         case .cursor:
@@ -43,8 +44,11 @@ public enum AgentHarness: String, CaseIterable, Sendable {
             ["node_modules/@openai/codex"]
         case .openCode:
             ["node_modules/opencode-ai"]
-        case .gemini:
-            ["node_modules/@google/gemini-cli"]
+        case .antigravity:
+            // Antigravity CLI is distributed as the native `agy` executable,
+            // while the desktop app runs as `Antigravity`; neither is an npm
+            // script-runtime install.
+            []
         case .copilot:
             // Also matches the @github/copilot-<platform> packages that carry
             // the native binary the npm loader script launches.
@@ -66,6 +70,22 @@ public enum AgentHarness: String, CaseIterable, Sendable {
     static func matching(scriptPath: String) -> AgentHarness? {
         allCases.first { harness in
             harness.scriptPathMarkers.contains { scriptPath.contains($0) }
+        }
+    }
+
+    /// Resolves native process names used by supported harnesses. Antigravity
+    /// has separate desktop and CLI surfaces, both backed by the same agent
+    /// harness and therefore reported as one activity row.
+    static func matching(executableName: String) -> AgentHarness? {
+        if let harness = AgentHarness(rawValue: executableName) {
+            return harness
+        }
+
+        switch executableName {
+        case "Antigravity", "antigravity":
+            return .antigravity
+        default:
+            return nil
         }
     }
 }

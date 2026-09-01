@@ -44,7 +44,7 @@ The GitHub release also includes a zipped `.app` bundle:
 - Launch at Login toggle
 - In-app update checks, installation, and restart
 - Battery Settings shortcut
-- Live session counts for Claude Code, OpenAI Codex CLI, OpenCode, Gemini CLI, GitHub Copilot CLI, Cursor CLI, and Pi in the menu panel
+- Live session counts for Claude Code, OpenAI Codex CLI, OpenCode, Antigravity, GitHub Copilot CLI, Cursor CLI, and Pi in the menu panel
 - Local session persistence and live `pmset` reconciliation
 - Raycast commands for enable, disable, and status
 - CLI commands for scripts and package managers

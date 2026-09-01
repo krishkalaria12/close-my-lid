@@ -1034,15 +1034,16 @@ struct TestRunner {
 
     private mutating func testAgentSessionsCountNewNativeBinaries() {
         let counts = AgentSessionClassifier.sessionCounts(in: [
-            RunningProcess(id: 700, parentID: 1, executableName: "gemini"),
+            RunningProcess(id: 700, parentID: 1, executableName: "agy"),
+            RunningProcess(id: 704, parentID: 1, executableName: "Antigravity"),
             RunningProcess(id: 701, parentID: 1, executableName: "copilot"),
             RunningProcess(id: 702, parentID: 1, executableName: "cursor-agent"),
             RunningProcess(id: 703, parentID: 1, executableName: "pi")
         ])
 
         expect(
-            counts == [.gemini: 1, .copilot: 1, .cursor: 1, .pi: 1],
-            "newly added native harness binaries are counted one session per process"
+            counts == [.antigravity: 2, .copilot: 1, .cursor: 1, .pi: 1],
+            "Antigravity's CLI and desktop app are counted as native harness sessions"
         )
     }
 
@@ -1075,12 +1076,6 @@ struct TestRunner {
                 id: 710,
                 parentID: 1,
                 executableName: "node",
-                arguments: ["node", "/usr/local/lib/node_modules/@google/gemini-cli/bundle/gemini.js"]
-            ),
-            RunningProcess(
-                id: 711,
-                parentID: 1,
-                executableName: "node",
                 arguments: ["node", "/usr/local/lib/node_modules/@github/copilot/npm-loader.js"]
             ),
             RunningProcess(
@@ -1092,8 +1087,8 @@ struct TestRunner {
         ])
 
         expect(
-            counts == [.gemini: 1, .copilot: 1, .pi: 1],
-            "npm installs of the new harnesses are detected from their package paths"
+            counts == [.copilot: 1, .pi: 1],
+            "npm installs of the supported script-runtime harnesses are detected from their package paths"
         )
     }
 

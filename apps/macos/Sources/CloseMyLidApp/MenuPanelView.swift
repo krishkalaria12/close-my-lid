@@ -249,7 +249,11 @@ struct MenuPanelView: View {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 16, height: 16)
+                        // Codex's mark reaches the edge of its 24pt SVG viewBox.
+                        // Leave a little breathing room inside every badge so it
+                        // renders fully at the small menu-panel size.
+                        .frame(width: 14, height: 14)
+                        .frame(width: 20, height: 20)
                 }
             }
             .frame(width: 28, height: 28)

@@ -44,7 +44,7 @@ public enum AgentSessionClassifier {
     }
 
     static func harness(for process: RunningProcess) -> AgentHarness? {
-        if let harness = AgentHarness(rawValue: process.executableName) {
+        if let harness = AgentHarness.matching(executableName: process.executableName) {
             return harness
         }
 
@@ -59,7 +59,7 @@ public enum AgentSessionClassifier {
         // the harness's install directory.
         for argument in process.arguments.dropFirst() where argument.contains("/") {
             if let basename = argument.split(separator: "/").last,
-               let harness = AgentHarness(rawValue: String(basename)) {
+               let harness = AgentHarness.matching(executableName: String(basename)) {
                 return harness
             }
             if let harness = AgentHarness.matching(scriptPath: argument) {
