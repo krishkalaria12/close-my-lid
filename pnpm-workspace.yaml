@@ -2,6 +2,13 @@ packages:
   - "apps/web"
   - "packages/raycast"
 
+# sharp's postinstall is what Astro's image pipeline needs, so its build script
+# must be allowed. pnpm 10 spells this onlyBuiltDependencies and pnpm 12 spells
+# it allowBuilds; both are listed so CI works whichever version it resolves.
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+
 allowBuilds:
   esbuild: true
   sharp: true
