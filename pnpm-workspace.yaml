@@ -1,0 +1,7 @@
+packages:
+  - "apps/web"
+  - "packages/raycast"
+
+allowBuilds:
+  esbuild: true
+  sharp: true

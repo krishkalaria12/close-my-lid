@@ -91,5 +91,12 @@ iOSInjectionProject/
 node_modules/
 dist/
 
+# Astro website (apps/web)
+.astro/
+apps/web/.astro/
+apps/web/dist/
+.vercel/
+.netlify/
+
 # macOS
 .DS_Store
