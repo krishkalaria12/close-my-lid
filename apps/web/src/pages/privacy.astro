@@ -1,0 +1,136 @@
+---
+import Base from "../layouts/Base.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import { site } from "../data/site";
+---
+
+<Base
+  title="Privacy — Close My Lid"
+  description="What Close My Lid collects, and what it never touches. No account, no telemetry, no server: the app flips one documented macOS power setting and nothing else."
+>
+  <SiteHeader />
+
+  <main class="prose">
+    <div class="proseTop">
+      <p class="proseMeta">Last updated {site.privacyUpdated}</p>
+      <a href="/" class="proseBack" data-astro-prefetch>← Back to home</a>
+    </div>
+    <h1 class="proseTitle">Privacy</h1>
+
+    <p>
+      Close My Lid is a free, MIT-licensed macOS menu bar app. It has no
+      account, no server, and nothing to sign in to. This page explains what the
+      app and this website touch, and what they never do.
+    </p>
+
+    <h2>The short version</h2>
+    <ul>
+      <li>There is no account, no sign-in, and no licence check.</li>
+      <li>
+        The app collects no analytics, no telemetry, and no crash reports, and
+        ships no third-party SDKs.
+      </li>
+      <li>
+        Nothing about your work leaves your Mac. Your session state lives in
+        local preferences.
+      </li>
+      <li>
+        The only network request the app makes is an update check against this
+        project's own release feed.
+      </li>
+      <li>
+        This website has no analytics, no cookies, and no advertising trackers.
+      </li>
+    </ul>
+
+    <h2>The app</h2>
+    <p>
+      Close My Lid holds a Mac awake with the lid shut by setting <code
+        >pmset -a disablesleep 1</code
+      >, and restores normal sleep with <code>pmset -a disablesleep 0</code>.
+      Those two commands are the only privileged thing it does. They are
+      allowlisted, with no wildcards, in a <code>sudoers</code> drop-in at
+      <code>/etc/sudoers.d/close-my-lid</code> that you approve once and can
+      remove at any time from Settings › Administrator Access.
+    </p>
+    <p>
+      The app asks macOS for no special permissions. There is no Accessibility,
+      no Input Monitoring, no Screen Recording, and no keystroke watching. It
+      does not read your source code, your prompts, your agent output, your
+      terminal history, or your files.
+    </p>
+
+    <h2>Agent detection</h2>
+    <p>
+      The menu panel shows how many sessions of each supported coding agent are
+      running. To do that it snapshots your own processes with a single
+      <code>sysctl(KERN_PROC_UID)</code> call — it does not spawn <code>ps</code
+      > or <code>pgrep</code>, and it cannot see other users' processes. It
+      matches executable names, and for installs that run under a JavaScript
+      runtime it reads the process arguments to find the install-directory path.
+    </p>
+    <p>
+      Those counts are computed on your Mac, displayed in the panel, and thrown
+      away. They are never stored, never logged, and never transmitted.
+    </p>
+
+    <h2>What is stored on your Mac</h2>
+    <p>
+      The app keeps your current session — the duration you picked and when it
+      ends — plus your Launch at Login preference, in local user preferences. A
+      heartbeat file lets the watchdog LaunchAgent release a stranded hold if
+      the app dies. All of it stays on the machine, and uninstalling removes it.
+    </p>
+
+    <h2>Updates</h2>
+    <p>
+      The app checks for updates through Sparkle against a signed appcast served
+      from this project's GitHub repository. That request carries your current
+      app version and the ordinary network metadata any HTTP request carries,
+      such as your IP address, which GitHub receives as the host. It does not
+      carry an identifier for you, and there is no telemetry attached to it.
+    </p>
+
+    <h2>This website</h2>
+    <p>
+      This site runs no analytics, sets no cookies, and includes no advertising
+      or tracking scripts. It loads the Schibsted Grotesk typeface from Google
+      Fonts, which means your browser requests the font files from Google's
+      servers. Downloads are served from GitHub Releases, so GitHub sees those
+      requests under its own privacy policy.
+    </p>
+
+    <h2>Your rights</h2>
+    <p>
+      There is nothing to request, correct, or delete, because no personal data
+      is collected in the first place. If you contact the project through
+      <a href={site.issues}>GitHub Issues</a>, whatever you write there is
+      public and governed by GitHub's privacy policy.
+    </p>
+
+    <h2>Children</h2>
+    <p>
+      Close My Lid is a developer tool and is not directed at children under 13.
+      No information is knowingly collected from them, or from anyone else.
+    </p>
+
+    <h2>Changes to this policy</h2>
+    <p>
+      If the way Close My Lid handles data ever changes, this page and the date
+      at the top will be updated, and the change will be noted in the release
+      notes.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions about privacy: open an issue on
+      <a href={site.repo}>GitHub</a> or reach out on
+      <a href={site.twitter} rel="me noopener" target="_blank">
+        {site.twitterHandle}
+      </a>.
+    </p>
+  </main>
+
+  <SiteFooter />
+</Base>

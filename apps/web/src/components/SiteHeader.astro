@@ -1,0 +1,27 @@
+---
+import { site } from "../data/site";
+
+interface Props {
+  /** Anchor links only work on the home page. */
+  home?: boolean;
+}
+
+const { home = false } = Astro.props;
+const base = home ? "" : "/";
+---
+
+<header class="nav">
+  <div class="navInner">
+    <a href={home ? "#top" : "/"} class="wordmark" data-astro-prefetch>
+      <img src="/icon-96.png" width="34" height="34" alt="" />
+      {site.name}
+    </a>
+    <nav class="navLinks" aria-label="Primary">
+      <a href={`${base}#how`}>How it works</a>
+      <a href={`${base}#agents`}>Agents</a>
+      <a href={`${base}#faq`}>FAQ</a>
+      <a href="/privacy" data-astro-prefetch>Privacy</a>
+      <a href={site.repo} class="navCta">GitHub</a>
+    </nav>
+  </div>
+</header>

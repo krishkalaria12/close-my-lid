@@ -1,0 +1,23 @@
+---
+import { site } from "../data/site";
+
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="footerInner">
+    <span>{site.name}</span>
+    <span>
+      Built by
+      <a href={site.twitter} rel="me noopener" target="_blank">
+        {site.twitterHandle}
+      </a>
+    </span>
+    <span class="footerLinks">
+      <a href={site.repo}>GitHub</a>
+      <a href={site.issues}>Support</a>
+      <a href="/privacy" data-astro-prefetch>Privacy</a>
+      <span>© {year}</span>
+    </span>
+  </div>
+</footer>

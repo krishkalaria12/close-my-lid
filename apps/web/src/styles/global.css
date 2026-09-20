@@ -1,0 +1,687 @@
+@import "tailwindcss";
+
+/* Design ported from SunkenInTime/which-ai, with-design-skill/fable-5.1
+   iteration 2 (app/(iterations)/2/page.module.css). */
+
+:root {
+  --paper: #f5f4ef;
+  --ink: #101010;
+  --mute: #6b6b66;
+  --rule: #d8d6cf;
+  --yellow: #fccc0a;
+
+  --line-r: #ee352e;
+  --line-w: #0039a6;
+  --line-p: #00933c;
+  --line-o: #ff6319;
+
+  --font-grot: "Schibsted Grotesk", Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-grot);
+  padding-bottom: 72px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.navInner,
+.hero,
+.how,
+.agents,
+.ctaInner,
+.footerInner {
+  width: min(1200px, 100% - 3rem);
+  margin-inline: auto;
+}
+
+/* ---- nav ---- */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: saturate(1.3) blur(12px);
+  -webkit-backdrop-filter: saturate(1.3) blur(12px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.navInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  height: 76px;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 800;
+  font-size: 1.3rem;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.wordmark img {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.navLinks a:not(.navCta) {
+  color: var(--mute);
+  transition: color 0.2s;
+}
+
+.navLinks a:not(.navCta):hover {
+  color: var(--ink);
+}
+
+.navCta {
+  padding: 0.55rem 1rem;
+  background: var(--ink);
+  color: #fff;
+  letter-spacing: -0.01em;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+
+.navCta:hover {
+  background: #2a2a2a;
+  transform: translateY(-1px);
+}
+
+/* ---- hero ---- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 11fr) minmax(0, 13fr);
+  gap: clamp(2rem, 4vw, 3.5rem);
+  align-items: center;
+  padding: clamp(2.5rem, 6vh, 5rem) 0 clamp(2rem, 5vh, 4rem);
+}
+
+.h1 {
+  margin: 0;
+  font-weight: 800;
+  font-size: clamp(2.6rem, 5vw, 4.6rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.lede {
+  margin: 1.5rem 0 0;
+  max-width: 30rem;
+  font-size: clamp(1.05rem, 1.35vw, 1.25rem);
+  line-height: 1.5;
+  color: #333;
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 2.25rem;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 1.4rem;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+
+.primary:hover {
+  background: #2a2a2a;
+  transform: translateY(-1px);
+}
+
+.primaryDark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 1.4rem;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.secondary {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+
+/* ---- hero shot, in place of the reference's transit map ---- */
+
+.heroShot {
+  min-width: 0;
+  margin: 0;
+}
+
+.shotFrame {
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  overflow: hidden;
+}
+
+.shotFrame img {
+  width: 100%;
+  height: auto;
+}
+
+.shotLegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 2px solid var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.badge {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.legendNote {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--mute);
+}
+
+/* ---- station sign headers ---- */
+
+.sign {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 2rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+  font-size: clamp(1.1rem, 1.6vw, 1.4rem);
+  letter-spacing: -0.01em;
+}
+
+.signBadge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.signBadge + .signBadge {
+  margin-left: -0.25rem;
+}
+
+.signBadge:last-of-type {
+  margin-right: 0.5rem;
+}
+
+/* ---- how ---- */
+
+.how {
+  padding: clamp(3rem, 7vh, 5rem) 0;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  border-top: 3px solid var(--ink);
+  padding-top: 1.25rem;
+}
+
+.stepBadge {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.stepTitle {
+  margin: 1rem 0 0.5rem;
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.stepBody {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: #333;
+}
+
+/* ---- agents (the reference's service information list) ---- */
+
+.agents {
+  padding: clamp(3rem, 7vh, 5rem) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.agentList {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agentItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.15rem 0.85rem 0.85rem;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  font-weight: 800;
+  font-size: 1.02rem;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+
+.agentIcon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.agentIcon img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+
+/* ---- faq ---- */
+
+.faq {
+  width: min(1200px, 100% - 3rem);
+  margin-inline: auto;
+  padding: clamp(3rem, 7vh, 5rem) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.faqList {
+  border-top: 1px solid var(--rule);
+}
+
+.q {
+  border-bottom: 1px solid var(--rule);
+}
+
+.q summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.1rem 0;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  list-style: none;
+}
+
+.q summary::-webkit-details-marker {
+  display: none;
+}
+
+.q summary > span:first-child {
+  flex: 1;
+}
+
+.qMark {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.qMark::before,
+.qMark::after {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto 0;
+  height: 2px;
+  background: var(--ink);
+  transition: transform 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.qMark::after {
+  transform: rotate(90deg);
+}
+
+.q[open] .qMark::after {
+  transform: rotate(0deg);
+}
+
+.aWrap {
+  overflow: hidden;
+}
+
+.q .a {
+  margin: 0;
+  padding: 0 0 1.3rem;
+  max-width: 62ch;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: #333;
+}
+
+.q .a code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: rgba(16, 16, 16, 0.07);
+  padding: 1px 6px;
+}
+
+/* ---- install strip ---- */
+
+.brew {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  max-width: 100%;
+  padding: 0.7rem 1rem;
+  border: 2px solid var(--ink);
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.brew:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+.brewCmd {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brewState {
+  flex: none;
+  font-weight: 800;
+}
+
+/* ---- cta ---- */
+
+.cta {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.ctaInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: clamp(2.5rem, 6vh, 4rem) 0;
+}
+
+.ctaH {
+  margin: 0;
+  max-width: 30rem;
+  font-weight: 800;
+  font-size: clamp(1.6rem, 3vw, 2.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+/* ---- footer ---- */
+
+.footer {
+  background: var(--ink);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.footerInner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.footerInner a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 0.2s;
+}
+
+.footerInner a:hover {
+  color: #fff;
+}
+
+.footerLinks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* ---- prose pages (privacy) ---- */
+
+.prose {
+  width: min(760px, 100% - 3rem);
+  margin-inline: auto;
+  padding: clamp(2.5rem, 6vh, 4.5rem) 0 clamp(3rem, 7vh, 5rem);
+}
+
+.proseTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.proseBack {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--mute);
+  transition: color 0.2s;
+}
+
+.proseBack:hover {
+  color: var(--ink);
+}
+
+.proseMeta {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.proseTitle {
+  margin: 1.75rem 0 1.25rem;
+  font-weight: 800;
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.prose h2 {
+  margin: 2.75rem 0 0.9rem;
+  font-weight: 800;
+  font-size: 1.4rem;
+  letter-spacing: -0.02em;
+}
+
+.prose p {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: #333;
+}
+
+.prose ul {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.prose li {
+  position: relative;
+  padding-left: 1.4rem;
+  margin-bottom: 0.6rem;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: #333;
+}
+
+.prose li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: rgba(16, 16, 16, 0.07);
+  padding: 1px 6px;
+}
+
+.prose a:not(.proseBack) {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+/* ---- responsive ---- */
+
+@media (max-width: 960px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .navLinks a:not(.navCta) {
+    display: none;
+  }
+  .brew {
+    font-size: 0.75rem;
+  }
+
+  /* Full width the shot is too small to read, so the frame goes portrait and
+     crops to the edge the menu panel sits on. */
+  .shotFrame {
+    aspect-ratio: 3 / 4;
+  }
+
+  .shotFrame img {
+    height: 100%;
+    object-fit: cover;
+    object-position: right center;
+  }
+}

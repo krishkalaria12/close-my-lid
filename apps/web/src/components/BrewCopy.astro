@@ -1,0 +1,61 @@
+---
+interface Props {
+  command: string;
+}
+
+const { command } = Astro.props;
+---
+
+<button
+  type="button"
+  class="brew"
+  data-brew={command}
+  aria-label="Copy the Homebrew install command"
+>
+  <span aria-hidden="true">$</span>
+  <span class="brewCmd">{command}</span>
+  <span class="brewState" data-brew-state aria-hidden="true">COPY</span>
+</button>
+<span class="sr-only" role="status" data-brew-status></span>
+
+<style>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+</style>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-brew]")) {
+    button.addEventListener("click", async () => {
+      const command = button.dataset.brew ?? "";
+      try {
+        await navigator.clipboard.writeText(command);
+      } catch {
+        const field = document.createElement("textarea");
+        field.value = command;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.append(field);
+        field.select();
+        document.execCommand("copy");
+        field.remove();
+      }
+
+      const state = button.querySelector("[data-brew-state]");
+      const status = button.nextElementSibling;
+      if (state) state.textContent = "COPIED";
+      if (status) status.textContent = "Command copied";
+
+      window.setTimeout(() => {
+        if (state) state.textContent = "COPY";
+        if (status) status.textContent = "";
+      }, 1800);
+    });
+  }
+</script>

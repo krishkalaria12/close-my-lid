@@ -1,0 +1,65 @@
+---
+import { faqs } from "../data/site";
+---
+
+<div class="faqList">
+  {
+    faqs.map((item) => (
+      <details class="q">
+        <summary>
+          <span>{item.q}</span>
+          <span class="qMark" aria-hidden="true" />
+        </summary>
+        <div class="aWrap">
+          <p class="a" set:html={item.a} />
+        </div>
+      </details>
+    ))
+  }
+</div>
+
+<script>
+  const DURATION = 260;
+  const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  for (const item of document.querySelectorAll<HTMLDetailsElement>("details.q")) {
+    const summary = item.querySelector("summary");
+    const wrap = item.querySelector<HTMLElement>(".aWrap");
+    if (!summary || !wrap) continue;
+
+    let animation: Animation | null = null;
+
+    const animate = (from: number, to: number, open: boolean) => {
+      animation?.cancel();
+      item.style.overflow = "hidden";
+      animation = wrap.animate(
+        { height: [`${from}px`, `${to}px`], opacity: [open ? 0 : 1, open ? 1 : 0] },
+        { duration: DURATION, easing: EASE }
+      );
+      animation.onfinish = () => {
+        item.open = open;
+        wrap.style.height = "";
+        item.style.overflow = "";
+        animation = null;
+      };
+      animation.oncancel = () => {
+        animation = null;
+      };
+    };
+
+    summary.addEventListener("click", (event) => {
+      if (reduced) return;
+      event.preventDefault();
+
+      if (item.open) {
+        animate(wrap.offsetHeight, 0, false);
+      } else {
+        item.open = true;
+        const target = wrap.offsetHeight;
+        wrap.style.height = "0px";
+        animate(0, target, true);
+      }
+    });
+  }
+</script>
