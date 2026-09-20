@@ -1,5 +1,7 @@
 export const site = {
   name: "Close My Lid",
+  tagline: "Keeps your Mac awake with the lid closed",
+  author: "Krish Kalaria",
   url: "https://closemylid.app",
   version: "0.4.4",
   minMacOS: "macOS 14 or later",

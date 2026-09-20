@@ -7,7 +7,7 @@ import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import Faq from "../components/Faq.astro";
 import heroShot from "../assets/hero.png";
-import { site, agents } from "../data/site";
+import { site, agents, faqs } from "../data/site";
 
 const LINE = {
   R: "var(--line-r)",
@@ -36,11 +36,59 @@ const STEPS = [
     body: "The Mac keeps running instead of sleeping. When the timer expires, the battery gets low, or you quit, normal sleep comes straight back.",
   },
 ] as const;
+const stripTags = (html: string) => html.replace(/<[^>]+>/g, "");
+
+const schema = [
+  {
+    "@type": "SoftwareApplication",
+    "@id": `${site.url}/#app`,
+    name: site.name,
+    applicationCategory: "DeveloperApplication",
+    applicationSubCategory: "Power management",
+    operatingSystem: "macOS 14.0 or later",
+    processorRequirements: "Apple silicon",
+    softwareVersion: site.version,
+    url: site.url,
+    downloadUrl: site.download,
+    installUrl: site.download,
+    softwareHelp: `${site.repo}#readme`,
+    license: "https://opensource.org/licenses/MIT",
+    isAccessibleForFree: true,
+    image: `${site.url}/og-image.png`,
+    description:
+      "A macOS menu bar app that keeps a Mac awake with the lid closed while coding agents, builds and downloads finish. Timed sessions, one passwordless admin grant, a dead-man watchdog and a low-battery release.",
+    featureList: [
+      "30 minute, 1 hour, 4 hour and unlimited lid-proof sessions",
+      "One admin prompt installs a scoped sudoers allowlist, then every hold is passwordless",
+      "Dead-man watchdog restores sleep if the app dies mid-hold",
+      "Low-battery safety release at 5% on battery power",
+      "Live session counts for seven coding agents",
+      "CLI and Raycast commands sharing the same session state",
+    ],
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+      availability: "https://schema.org/InStock",
+    },
+    author: { "@id": `${site.url}/#person` },
+  },
+  {
+    "@type": "FAQPage",
+    "@id": `${site.url}/#faq`,
+    mainEntity: faqs.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: stripTags(item.a) },
+    })),
+  },
+];
 ---
 
 <Base
   title="Close My Lid — Keep your Mac awake with the lid closed"
   description="A macOS menu bar app that keeps your Mac awake with the lid shut while coding agents, builds and downloads finish. Free and open source."
+  schema={schema}
 >
   <SiteHeader home />
 
