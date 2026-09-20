@@ -1,0 +1,157 @@
+---
+import { Image } from "astro:assets";
+import Base from "../layouts/Base.astro";
+import AppleMark from "../components/AppleMark.astro";
+import BrewCopy from "../components/BrewCopy.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import Faq from "../components/Faq.astro";
+import heroShot from "../assets/hero.png";
+import { site, agents } from "../data/site";
+
+const LINE = {
+  R: "var(--line-r)",
+  W: "var(--line-w)",
+  P: "var(--line-p)",
+  O: "var(--line-o)",
+} as const;
+
+const STEPS = [
+  {
+    n: "1",
+    color: LINE.R,
+    title: "Pick how long",
+    body: "30 minutes, 1 hour, 4 hours, or unlimited. The toggle remembers the duration you chose last, and the menu shows an exact end-of-session timer.",
+  },
+  {
+    n: "2",
+    color: LINE.W,
+    title: "Approve once",
+    body: "A single admin prompt installs a scoped sudoers allowlist — exactly two pmset commands, no wildcards. Every hold after that is passwordless.",
+  },
+  {
+    n: "3",
+    color: LINE.P,
+    title: "Close the lid",
+    body: "The Mac keeps running instead of sleeping. When the timer expires, the battery gets low, or you quit, normal sleep comes straight back.",
+  },
+] as const;
+---
+
+<Base
+  title="Close My Lid — Keep your Mac awake with the lid closed"
+  description="A macOS menu bar app that keeps your Mac awake with the lid shut while coding agents, builds and downloads finish. Free and open source."
+>
+  <SiteHeader home />
+
+  <main id="top">
+    <section class="hero">
+      <div>
+        <h1 class="h1">Close the lid.<br />Keep working.</h1>
+        <p class="lede">
+          Close My Lid keeps your Mac awake with the lid shut, so builds,
+          downloads and coding agents finish while the machine is in your bag.
+          One admin prompt, then it never asks again.
+        </p>
+        <div class="ctas">
+          <a href={site.download} class="primary">
+            <AppleMark />
+            Download for Mac — free
+          </a>
+          <a href="#how" class="secondary">How it works ↓</a>
+        </div>
+        <div style="margin-top:1.5rem">
+          <BrewCopy command={site.brewCask} />
+        </div>
+      </div>
+
+      <figure class="heroShot">
+        <div class="shotFrame">
+          <Image
+            src={heroShot}
+            alt="The Close My Lid menu bar panel open on a Mac desktop: a hold toggle with its status line, a battery bar reading 11% left and stopping at 5%, live session counts for seven coding agents, and 30 minute, 1 hour, 4 hour and Unlimited hold presets."
+            widths={[640, 960, 1280, 1880]}
+            sizes="(max-width: 960px) 92vw, 640px"
+            quality={82}
+            loading="eager"
+            fetchpriority="high"
+          />
+        </div>
+        <figcaption class="shotLegend">
+          <span class="legendItem">
+            <span class="badge" style={`background:${LINE.R}`}>H</span>
+            Hold
+          </span>
+          <span class="legendItem">
+            <span class="badge" style={`background:${LINE.W}`}>B</span>
+            Battery
+          </span>
+          <span class="legendItem">
+            <span class="badge" style={`background:${LINE.P}`}>A</span>
+            Agents
+          </span>
+          <span class="legendNote">{site.minMacOS} · {site.arch}</span>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="how" class="how">
+      <h2 class="sign">
+        <span class="signBadge" style={`background:${LINE.R}`}>1</span>
+        <span class="signBadge" style={`background:${LINE.W}`}>2</span>
+        <span class="signBadge" style={`background:${LINE.P}`}>3</span>
+        Three steps to a lid-proof Mac
+      </h2>
+      <ol class="steps">
+        {
+          STEPS.map((step) => (
+            <li class="step">
+              <span
+                class="stepBadge"
+                style={`background:${step.color}`}
+                aria-hidden="true"
+              >
+                {step.n}
+              </span>
+              <h3 class="stepTitle">{step.title}</h3>
+              <p class="stepBody">{step.body}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+
+    <section id="agents" class="agents">
+      <h2 class="sign">Agents we detect</h2>
+      <ul class="agentList">
+        {
+          agents.map((agent) => (
+            <li class="agentItem">
+              <span class="agentIcon" aria-hidden="true">
+                <img src={agent.icon} width="18" height="18" alt="" loading="lazy" />
+              </span>
+              {agent.name}
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section id="faq" class="faq">
+      <h2 class="sign">Questions</h2>
+      <Faq />
+    </section>
+
+    <section class="cta">
+      <div class="ctaInner">
+        <h2 class="ctaH">Your agents keep typing. Shut the lid.</h2>
+        <a href={site.download} class="primaryDark">
+          <AppleMark />
+          Download for Mac — free
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</Base>
