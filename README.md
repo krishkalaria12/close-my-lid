@@ -2,7 +2,7 @@
 
 Close My Lid keeps a Mac awake while coding agents, builds, downloads, and other long-running work continue after the laptop lid is closed.
 
-It ships as a native macOS menu bar app, a `close-my-lid` CLI, a Raycast extension, and Homebrew formula/cask packages.
+It ships as a native macOS menu bar app, a `close-my-lid` CLI, a Raycast extension, Homebrew formula/cask packages, and the marketing site.
 
 ## Install
 
@@ -86,11 +86,30 @@ The project is organized as a small monorepo so the native app, Raycast extensio
 
 ```text
 apps/macos/        Native macOS menu bar app, CLI, and Swift tests
+apps/web/          Astro + Tailwind + React marketing site
 packages/raycast/  Raycast extension
 Formula/           Legacy migration copy of the Homebrew CLI formula
 Casks/             Legacy migration copy of the Homebrew app cask
 docs/              Product and implementation notes
 scripts/           Release and packaging helpers
+```
+
+The JavaScript packages are a pnpm workspace (`pnpm-workspace.yaml`). Install
+once from the repository root:
+
+```sh
+pnpm install
+```
+
+Root scripts proxy to the workspace packages:
+
+```sh
+pnpm dev             # run the website locally
+pnpm build           # type-check and build the website
+pnpm raycast:dev     # run the Raycast extension
+pnpm macos:build     # swift build the menu bar app
+pnpm macos:test      # run the Swift test target
+pnpm macos:package   # build the .app bundle into dist/macos
 ```
 
 Build and test the Swift package:
@@ -113,10 +132,29 @@ open "dist/macos/Close My Lid.app"
 Run the Raycast extension:
 
 ```sh
-cd packages/raycast
-npm install
-npm run dev
+pnpm --filter ./packages/raycast dev
 ```
+
+## Website
+
+`apps/web` is the [Astro](https://astro.build) site for closemylid.app, built
+with Tailwind CSS v4 through `@tailwindcss/vite`. The visual design is ported
+from [SunkenInTime/which-ai](https://github.com/SunkenInTime/which-ai),
+`with-design-skill/fable-5.1` iteration 2.
+
+```sh
+pnpm --filter @close-my-lid/web dev
+pnpm --filter @close-my-lid/web build
+pnpm --filter @close-my-lid/web preview
+```
+
+Product copy, download links and the version shown on the page all come from
+`apps/web/src/data/site.ts`, and the agent marks in `apps/web/public/agents/`
+are the same SVGs the menu panel renders. Update both when cutting a release.
+
+The hero shot is `apps/web/src/assets/hero.png`, optimized at build time by
+`astro:assets`. Replace that file to refresh the screenshot; the responsive
+`webp` variants are regenerated automatically.
 
 ## Packaging
 
