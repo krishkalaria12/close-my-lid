@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "close-my-lid",
+  "compatibility_date": "2026-09-20",
+  // The site is a monorepo package, so the built output lives under apps/web.
+  // This path is relative to this file, which sits at the repository root
+  // because Workers Builds runs from there.
+  "assets": {
+    "directory": "./apps/web/dist",
+    "not_found_handling": "404-page"
+  }
+}
