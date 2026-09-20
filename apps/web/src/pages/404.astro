@@ -1,0 +1,25 @@
+---
+import Base from "../layouts/Base.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+---
+
+<Base
+  title="Not found — Close My Lid"
+  description="That page does not exist."
+>
+  <SiteHeader />
+
+  <main class="prose">
+    <h1 class="proseTitle">This stop doesn't exist.</h1>
+    <p>
+      The page you asked for isn't here. Head back to the front page for the
+      download, the agents Close My Lid detects, and the questions.
+    </p>
+    <p>
+      <a href="/" class="primary" data-astro-prefetch>Back to home</a>
+    </p>
+  </main>
+
+  <SiteFooter />
+</Base>
