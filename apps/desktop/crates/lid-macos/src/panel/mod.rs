@@ -193,8 +193,10 @@ impl Panel {
             delegate: RefCell::new(Some(delegate)),
         };
         // Start from the layout the machine actually needs, so the first
-        // appearance is already the right height.
-        panel.apply_layout(lidcore::battery::read().is_some());
+        // appearance is already the right height. The controller was refreshed
+        // just before this, so its reading is current — taking another one
+        // here would be a second IOKit query for an answer already in hand.
+        panel.apply_layout(app.controller.borrow().battery().is_some());
         panel
     }
 

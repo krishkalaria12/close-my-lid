@@ -6,6 +6,7 @@
 //! into this, and the panel reads back out of it.
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use chrono::{DateTime, Utc};
 use lidcore::heartbeat::{self, HoldHeartbeat, HoldHeartbeatStore};
@@ -38,9 +39,21 @@ pub struct Controller {
 
     /// Refreshed only while the panel is open; see [`Self::refresh_readouts`].
     battery: Option<BatteryStatus>,
+    /// When [`Self::battery`] was last read, so the panel's ticker and the
+    /// reconciliation pass do not each take their own reading when they
+    /// happen to land together.
+    battery_read_at: Option<Instant>,
     agents: HashMap<AgentHarness, usize>,
     update: Option<UpdateInfo>,
 }
+
+/// How long a battery reading is reused for.
+///
+/// Short enough that the safety release still acts on a current percentage —
+/// a battery does not move measurably in two seconds — and long enough to
+/// collapse the panel refresh and the reconciliation pass into one read when
+/// their timers coincide.
+const BATTERY_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(2);
 
 impl Controller {
     pub fn new() -> Result<Self> {
@@ -60,6 +73,7 @@ impl Controller {
             wake_restore_pending: false,
             wake_restore_ready: false,
             battery: None,
+            battery_read_at: None,
             agents: HashMap::new(),
             update: None,
         })
@@ -96,8 +110,24 @@ impl Controller {
     /// Called only when the panel is about to be shown and while it is open,
     /// so the process scan never runs for a UI nobody is looking at.
     pub fn refresh_readouts(&mut self) {
-        self.battery = battery::read();
+        self.read_battery();
         self.agents = lidcore::sessions_now();
+    }
+
+    /// The current battery, reading it again only once the cached value has
+    /// gone stale. Both the panel's ticker and the reconciliation pass want
+    /// this, on timers that drift in and out of step.
+    fn read_battery(&mut self) -> Option<BatteryStatus> {
+        let fresh = self
+            .battery_read_at
+            .is_some_and(|read_at| read_at.elapsed() < BATTERY_CACHE_TTL);
+        if fresh {
+            return self.battery;
+        }
+
+        self.battery = battery::read();
+        self.battery_read_at = Some(Instant::now());
+        self.battery
     }
 
     // MARK: starting and stopping
@@ -242,10 +272,9 @@ impl Controller {
     /// battery power — holding the lid open on a draining battery is how you
     /// come back to a dead laptop.
     fn enforce_battery_safety(&mut self) {
-        let Some(status) = battery::read() else {
+        let Some(status) = self.read_battery() else {
             return;
         };
-        self.battery = Some(status);
         match self.session.stop_if_battery_low(status) {
             Ok(true) => {
                 self.clear_heartbeat();
