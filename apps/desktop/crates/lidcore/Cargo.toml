@@ -18,3 +18,13 @@ tracing.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# The Power* scheme APIs live behind Win32_System_Registry because they take
+# an HKEY root. LocalFree, which releases the GUID PowerGetActiveScheme
+# allocates, lives in Win32_Foundation.
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_System_Power",
+    "Win32_System_Registry",
+] }
