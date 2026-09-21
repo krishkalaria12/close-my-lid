@@ -2,7 +2,7 @@
   "name": "close-my-lid-monorepo",
   "private": true,
   "version": "0.4.4",
-  "description": "Close My Lid monorepo: native macOS menu bar app, CLI, Raycast extension, and marketing site.",
+  "description": "Close My Lid monorepo: native menu bar app for macOS, CLI and tray app for Linux and Windows, Raycast extension, and marketing site.",
   "license": "MIT",
   "packageManager": "pnpm@12.4.1",
   "engines": {
@@ -16,8 +16,10 @@
     "web:build": "pnpm --filter @close-my-lid/web build",
     "raycast:dev": "pnpm --filter ./packages/raycast dev",
     "raycast:build": "pnpm --filter ./packages/raycast build",
-    "macos:build": "swift build --package-path apps/macos",
-    "macos:test": "swift run --package-path apps/macos CloseMyLidCoreTests",
+    "desktop:build": "cargo build --manifest-path apps/desktop/Cargo.toml",
+    "desktop:test": "cargo test --manifest-path apps/desktop/Cargo.toml -p lidcore -p lid-macos",
+    "macos:build": "cargo build --manifest-path apps/desktop/Cargo.toml -p lid-macos",
+    "macos:test": "cargo test --manifest-path apps/desktop/Cargo.toml -p lidcore -p lid-macos",
     "macos:package": "./scripts/package-macos-app.sh"
   }
 }

@@ -7,16 +7,19 @@
 //!   kernel releases the inhibitor if we die, so no watchdog is needed.
 //! - **Windows** rewrites the active power scheme's `LIDACTION` to "do
 //!   nothing" and pairs it with `SetThreadExecutionState`. That change is
-//!   global and persistent, so the previous value is saved and restored — the
-//!   same save/restore obligation the macOS app has with `pmset`.
-//! - **macOS** is served by the Swift app in `apps/macos` and is unsupported
-//!   here on purpose.
+//!   global and persistent, so the previous value is saved and restored.
+//! - **macOS** sets `pmset -a disablesleep`, first through a passwordless
+//!   sudoers grant and otherwise through a single administrator prompt. Like
+//!   Windows the change is global and persistent, so a watchdog LaunchAgent
+//!   restores normal sleep when a hold looks stranded.
 
 use crate::error::Result;
 
 #[cfg(target_os = "linux")]
 pub mod linux;
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(target_os = "macos")]
+pub mod macos;
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub mod unsupported;
 #[cfg(target_os = "windows")]
 pub mod windows;
@@ -50,8 +53,12 @@ pub fn backend() -> Result<Box<dyn LidPowerBackend>> {
     {
         Ok(Box::new(windows::PowerSchemeLidGuard::new()))
     }
+    #[cfg(target_os = "macos")]
+    {
+        Ok(Box::new(macos::PmsetLidGuard::new()))
+    }
 
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
         Err(crate::error::LidError::UnsupportedPlatform {
             os: std::env::consts::OS,

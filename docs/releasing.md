@@ -1,6 +1,8 @@
 # Releasing Close My Lid
 
-The macOS app uses Sparkle 2 to discover, download, install, and relaunch updates. The committed `appcast.xml` is the stable update feed. Never publish its update item before the matching GitHub Release archive is available.
+The committed `appcast.xml` is the stable update feed. The app reads the newest item's `sparkle:shortVersionString`, compares it against its own version, and offers to open the release page — it never downloads or installs anything itself. Never publish an update item before the matching GitHub Release archive is available, or the app will send people to a page that has nothing on it.
+
+The feed keeps Sparkle's element names because the site and older installs already read them; the framework itself is gone.
 
 ## Homebrew updater setup
 
@@ -14,20 +16,20 @@ The Administration permission lets the updater verify that `main` still enforces
 
 ## Signing setup
 
-Sparkle's Ed25519 private key is stored in the developer's login Keychain under the `close-my-lid` account. The corresponding public key is embedded by `scripts/package-macos-app.sh`.
+Releases are signed with a Developer ID Application identity and notarized by Apple. That is the only signature that matters now: Gatekeeper checks it when the user opens the downloaded app.
 
-On a new release machine, securely transfer an exported private key and import it without committing the key file:
+The feed carries no signature of its own for new items. Nothing verifies one, because nothing is fetched and executed from the feed — `scripts/validate-appcast.rb` explains the reasoning in full.
 
-```bash
-apps/macos/.build/artifacts/sparkle/Sparkle/bin/generate_keys \
-  --account close-my-lid \
-  -f /secure/path/close-my-lid-sparkle-private-key
-```
+What does still matter is *where* an item points. The app refuses to open an enclosure URL that is not under `https://github.com/krishkalaria12/close-my-lid/releases/`, and `scripts/validate-appcast.rb` refuses to pass a feed containing one, so a tampered feed cannot send anyone somewhere else.
 
 ## Publish an update
 
-1. Increase `VERSION` and the monotonically increasing integer `BUILD_VERSION`.
-2. Build with a Developer ID identity. Ad-hoc signing is only for local validation:
+1. Increase the `version` under `[workspace.package]` in `apps/desktop/Cargo.toml`, and the monotonically increasing integer `BUILD_VERSION`. The packaging script reads the version from that manifest — the same place the binary gets its own `--version` and the one it compares against this feed — and refuses to package a bundle whose `Info.plist` and executable disagree. Set `VERSION` in the environment only to override it deliberately.
+2. Build with a Developer ID identity. Ad-hoc signing is only for local validation. The packaging script produces a universal binary when both Apple targets are installed:
+
+```bash
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+```
 
 ```bash
 VERSION=<version> BUILD_VERSION=<integer> \
@@ -48,16 +50,15 @@ ditto -c -k --keepParent "dist/macos/Close My Lid.app" \
 ```
 
 4. Upload the immutable `Close-My-Lid-v<version>-macOS.zip` archive to its GitHub Release.
-5. Put the archive in a directory containing all update archives that should remain in the feed, then generate the appcast:
+5. Add an item to the top of `appcast.xml`, copying the shape of the one below it. `length` is the archive's size in bytes:
 
 ```bash
-apps/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast \
-  --account close-my-lid \
-  --download-url-prefix "https://github.com/krishkalaria12/close-my-lid/releases/download/v<version>/" \
-  /path/to/update-archives
+stat -f%z "Close-My-Lid-v<version>-macOS.zip"
 ```
 
-6. Review the generated feed, replace `appcast.xml`, and run `ruby scripts/validate-appcast.rb` before committing it.
+   Items are newest-first — the app reads the first one and stops. Drop `sparkle:hardwareRequirements` from new items: the bundle is universal, so it is no longer arm64-only.
+
+6. Run `ruby scripts/validate-appcast.rb` before committing the feed.
 7. Confirm the Homebrew update workflow opens or updates a pull request in `krishkalaria12/homebrew-close-my-lid` with the matching formula and cask checksums.
 8. Include the conventional fresh-install command in its own release-note code block:
 
@@ -74,4 +75,4 @@ brew tap krishkalaria12/close-my-lid
 
 Put upgrade instructions in a separate "Existing installations" section so they cannot be mistaken for fresh-install instructions.
 
-Test the full path from an older installed, Developer ID-signed build. A build of the current version cannot exercise replacement and relaunch.
+Test the full path from an older installed, Developer ID-signed build: a build of the current version never shows the update row, so it cannot exercise the notice at all.

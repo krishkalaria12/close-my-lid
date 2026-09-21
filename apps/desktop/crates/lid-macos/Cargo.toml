@@ -1,0 +1,30 @@
+[package]
+name = "lid-macos"
+description = "Close My Lid menu bar app for macOS, built directly on AppKit through objc2."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "CloseMyLid"
+path = "src/main.rs"
+
+[dependencies]
+lidcore.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2.workspace = true
+objc2-foundation.workspace = true
+objc2-app-kit.workspace = true
+objc2-user-notifications.workspace = true
+objc2-service-management.workspace = true
+objc2-core-foundation.workspace = true
+objc2-quartz-core.workspace = true
+block2.workspace = true
+dispatch2.workspace = true
+tracing-oslog.workspace = true

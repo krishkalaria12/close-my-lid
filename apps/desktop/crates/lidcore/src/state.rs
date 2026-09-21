@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 /// Whether a hold is running, and until when.
 ///
-/// Ported from the Swift `SleepControlState` so all platforms agree on what a
-/// session is and how it is persisted.
+/// Carried over from the Swift app's `SleepControlState`, so all platforms
+/// agree on what a session is and how it is persisted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum SleepControlState {
@@ -25,6 +25,18 @@ impl SleepControlState {
     pub fn ends_at(&self) -> Option<DateTime<Utc>> {
         match self {
             Self::Active { ends_at, .. } => *ends_at,
+            Self::Inactive => None,
+        }
+    }
+
+    /// When the running session began, or `None` if none is running.
+    ///
+    /// Needed by anything that has to line up with the session's own clock —
+    /// notably the notification plan, whose fire dates must match the end the
+    /// session actually recorded rather than the moment the request was made.
+    pub fn started_at(&self) -> Option<DateTime<Utc>> {
+        match self {
+            Self::Active { started_at, .. } => Some(*started_at),
             Self::Inactive => None,
         }
     }

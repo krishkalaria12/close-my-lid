@@ -13,12 +13,27 @@ use crate::error::{LidError, Result};
 
 /// Reverse-DNS identifier: the single-instance lock, the config directory and
 /// the systemd user unit all derive from this.
+///
+/// Deliberately *not* the macOS bundle identifier, which is
+/// `app.closemylid.CloseMyLid` — see `scripts/package-macos-app.sh`. The two
+/// have always differed, and changing either is a migration rather than a
+/// tidy-up: the bundle identifier is what the notification authorization,
+/// the `SMAppService` login item registration and Gatekeeper's record of the
+/// app are all keyed on, and this one is what names the directory holding a
+/// live hold's state. Renaming the bundle would re-prompt every existing
+/// install for notification permission and drop its login item; renaming this
+/// would strand the session file that lets a hold be released after a crash.
+///
+/// The watchdog LaunchAgent is a third name again (`app.closemylid.watchdog`,
+/// in `launchd`), matching the bundle's namespace, and its path is what makes
+/// replacing `/Applications/Close My Lid.app` a drop-in swap.
 pub const APP_ID: &str = "com.krishkalaria.close-my-lid";
 
 /// Human-facing app name, used in notifications and CLI output.
 pub const APP_NAME: &str = "Close My Lid";
 
-/// Kept in sync with the root `package.json` and the Swift CLI.
+/// Kept in sync with the root `package.json` and the packaged bundle's
+/// `CFBundleShortVersionString`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Battery percentage at which an unplugged hold is released. Matches the
@@ -53,6 +68,18 @@ pub fn config_dir() -> Result<PathBuf> {
 /// Where the current session is persisted.
 pub fn session_file() -> Result<PathBuf> {
     Ok(config_dir()?.join("session.json"))
+}
+
+/// Where the watchdog heartbeat is persisted (macOS). Written by the app while
+/// a hold is active; read by the `--watchdog` pass.
+pub fn heartbeat_file() -> Result<PathBuf> {
+    Ok(config_dir()?.join("heartbeat.json"))
+}
+
+/// Where the last-picked hold duration is persisted, so the main toggle can
+/// re-apply it.
+pub fn selected_duration_file() -> Result<PathBuf> {
+    Ok(config_dir()?.join("selected-duration"))
 }
 
 #[cfg(test)]

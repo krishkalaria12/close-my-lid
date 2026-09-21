@@ -14,17 +14,21 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-
-      - name: Validate Swift package
-        working-directory: apps/macos
+      # The menu bar app talks to AppKit through objc2, so Command Line Tools
+      # are enough — there is no Metal shader compiler in the build and
+      # therefore no need to select full Xcode.
+      - name: Test the macOS app
+        working-directory: apps/desktop
         run: |
-          swift build --jobs 2 --product CloseMyLidCoreTests
-          .build/debug/CloseMyLidCoreTests
-          swift build --jobs 2 --product CloseMyLid
-          .build/debug/CloseMyLid --version
-          .build/debug/CloseMyLid status
+          cargo test -p lidcore -p lid-macos
+          cargo clippy -p lidcore -p lid-macos --all-targets -- -D warnings
+
+      - name: Smoke test the bundled executable
+        working-directory: apps/desktop
+        run: |
+          cargo build -p lid-macos
+          ./target/debug/CloseMyLid --version
+          ./target/debug/CloseMyLid status
 
       - name: Install Raycast dependencies
         working-directory: packages/raycast
@@ -47,13 +51,27 @@ jobs:
           ruby scripts/validate-release-instructions-test.rb
           ruby scripts/validate-release-instructions.rb
 
+      # Added from inside the workspace, because `apps/desktop/rust-toolchain.toml`
+      # pins the toolchain. Run from the repository root this installs the
+      # targets into the *default* toolchain instead, and the packaging build —
+      # which runs under the pinned one — then fails with "can't find crate for
+      # `std`" for a target rustup has just reported adding successfully.
+      - name: Install the Apple targets
+        working-directory: apps/desktop
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          rustup target list --installed
+
       - name: Package macOS app
         run: |
           ./scripts/package-macos-app.sh
           plutil -lint "dist/macos/Close My Lid.app/Contents/Info.plist"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' 'dist/macos/Close My Lid.app/Contents/Info.plist')" = "https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/appcast.xml"
-          test -n "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' 'dist/macos/Close My Lid.app/Contents/Info.plist')"
-          test -d "dist/macos/Close My Lid.app/Contents/Frameworks/Sparkle.framework"
-          otool -L "dist/macos/Close My Lid.app/Contents/MacOS/CloseMyLid" | grep -F '@rpath/Sparkle.framework/'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' 'dist/macos/Close My Lid.app/Contents/Info.plist')" = "true"
+          # Both Macs, from one archive.
+          lipo -archs "dist/macos/Close My Lid.app/Contents/MacOS/CloseMyLid" | grep -F 'arm64'
+          lipo -archs "dist/macos/Close My Lid.app/Contents/MacOS/CloseMyLid" | grep -F 'x86_64'
+          # A menu bar app that drags in a framework has regressed: the bundle
+          # is meant to be one self-contained executable plus its icon.
+          test ! -d "dist/macos/Close My Lid.app/Contents/Frameworks"
           codesign --verify --deep --strict --verbose=2 "dist/macos/Close My Lid.app"
           ruby scripts/validate-appcast.rb
