@@ -6,6 +6,7 @@
 //! [`darwin`], which filters by uid in the kernel and reads arguments only
 //! where they are needed, while Linux and Windows go through `sysinfo`.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -76,6 +77,12 @@ impl AgentHarness {
             Self::Antigravity => &["agy", "antigravity"],
             Self::Copilot => &["copilot"],
             Self::Cursor => &["cursor-agent"],
+            // Short enough to collide with an unrelated program of the same
+            // name, which would show a session that is not one. Kept anyway:
+            // it is how a native install reports itself, the cost of a false
+            // positive is one extra row in a readout, and the alternative —
+            // matching only the npm install path — would stop detecting the
+            // native binary entirely.
             Self::Pi => &["pi"],
         }
     }
@@ -100,16 +107,17 @@ impl AgentHarness {
     }
 
     fn matching_executable(name: &str) -> Option<Self> {
-        // Windows reports `claude.exe`; compare against the bare stem.
-        let stem = name.strip_suffix(".exe").unwrap_or(name).to_lowercase();
-        Self::ALL
-            .into_iter()
-            .find(|harness| harness.executable_names().contains(&stem.as_str()))
+        let stem = executable_stem(name);
+        Self::ALL.into_iter().find(|harness| {
+            harness
+                .executable_names()
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(stem))
+        })
     }
 
     fn matching_script_path(path: &str) -> Option<Self> {
-        // Normalise Windows separators so one marker list serves both.
-        let normalised = path.replace('\\', "/");
+        let normalised = normalise_separators(path);
         Self::ALL.into_iter().find(|harness| {
             harness
                 .script_path_markers()
@@ -117,6 +125,47 @@ impl AgentHarness {
                 .any(|marker| normalised.contains(marker))
         })
     }
+}
+
+/// An executable name without its Windows extension.
+///
+/// Borrowed rather than lowercased: this runs for every process on the machine
+/// every time the panel refreshes, and the comparisons that use it are
+/// case-insensitive anyway.
+fn executable_stem(name: &str) -> &str {
+    match name.len().checked_sub(4) {
+        Some(split)
+            if name.is_char_boundary(split) && name[split..].eq_ignore_ascii_case(".exe") =>
+        {
+            &name[..split]
+        }
+        _ => name,
+    }
+}
+
+/// Windows separators turned into `/` so one marker list serves every
+/// platform. A path with no backslash — every macOS and Linux path — is
+/// matched in place rather than copied.
+fn normalise_separators(path: &str) -> Cow<'_, str> {
+    if path.contains('\\') {
+        Cow::Owned(path.replace('\\', "/"))
+    } else {
+        Cow::Borrowed(path)
+    }
+}
+
+/// Whether a process name is a JavaScript runtime an npm-installed harness
+/// runs under.
+///
+/// Shared with [`darwin`] so the snapshot pays for a process's arguments in
+/// exactly the cases classification will go on to read them. The two used to
+/// disagree on case, which meant a process reported as `Node` was classified
+/// as a runtime but never had its arguments fetched.
+pub(crate) fn is_script_runtime(name: &str) -> bool {
+    let stem = executable_stem(name);
+    SCRIPT_RUNTIMES
+        .iter()
+        .any(|runtime| runtime.eq_ignore_ascii_case(stem))
 }
 
 /// JavaScript runtimes that npm-installed harnesses run under. Also the set
@@ -138,12 +187,7 @@ impl RunningProcess {
             return Some(harness);
         }
 
-        let stem = self
-            .executable_name
-            .strip_suffix(".exe")
-            .unwrap_or(&self.executable_name)
-            .to_lowercase();
-        if !SCRIPT_RUNTIMES.contains(&stem.as_str()) {
+        if !is_script_runtime(&self.executable_name) {
             return None;
         }
 
@@ -334,6 +378,38 @@ mod tests {
             &["node", "/home/k/projects/codex/server.js"],
         )]);
         assert!(counts.is_empty());
+    }
+
+    #[test]
+    fn executable_matching_ignores_case_and_the_windows_extension() {
+        assert_eq!(executable_stem("claude.EXE"), "claude");
+        assert_eq!(executable_stem("claude"), "claude");
+        // Short names and multi-byte ones must not panic on the split.
+        assert_eq!(executable_stem("pi"), "pi");
+        assert_eq!(executable_stem("αβγδε"), "αβγδε");
+
+        let counts = session_counts(&[process(10, 1, "Cursor-Agent.exe", &[])]);
+        assert_eq!(counts.get(&AgentHarness::Cursor), Some(&1));
+    }
+
+    #[test]
+    fn the_runtime_test_matches_what_classification_accepts() {
+        // The macOS snapshot uses this to decide whose arguments to pay for.
+        // Anything it says no to can never be classified as a script harness.
+        for name in ["node", "Node", "bun", "BUN", "node.exe"] {
+            assert!(is_script_runtime(name), "{name}");
+        }
+        for name in ["claude", "nodemon", "deno", ""] {
+            assert!(!is_script_runtime(name), "{name}");
+        }
+
+        let counts = session_counts(&[process(
+            11,
+            1,
+            "Node",
+            &["node", "/usr/lib/node_modules/@openai/codex/bin/codex.js"],
+        )]);
+        assert_eq!(counts.get(&AgentHarness::Codex), Some(&1));
     }
 
     #[test]

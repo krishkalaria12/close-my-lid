@@ -20,7 +20,7 @@
 use std::ffi::{c_int, c_void};
 use std::path::PathBuf;
 
-use super::{RunningProcess, SCRIPT_RUNTIMES};
+use super::{RunningProcess, is_script_runtime};
 
 /// `PROC_UID_ONLY` from `<sys/proc_info.h>`: list only this uid's processes.
 const PROC_UID_ONLY: u32 = 4;
@@ -49,7 +49,7 @@ pub fn snapshot() -> Vec<RunningProcess> {
         }
 
         let executable_name = process_name(&info);
-        let arguments = if SCRIPT_RUNTIMES.contains(&executable_name.as_str()) {
+        let arguments = if is_script_runtime(&executable_name) {
             if argument_buffer.is_empty() {
                 argument_buffer = vec![0; argument_max()];
             }
