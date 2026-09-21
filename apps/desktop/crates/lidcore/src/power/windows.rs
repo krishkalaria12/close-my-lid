@@ -15,6 +15,9 @@
 //! compile-checked, since the workspace was scaffolded on macOS. Build and run
 //! this on a Windows machine before trusting it.
 
+use std::fs;
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 use windows::Win32::Foundation::{HLOCAL, LocalFree, WIN32_ERROR};
@@ -38,12 +41,60 @@ const LID_ACTION_DO_NOTHING: u32 = 0;
 
 /// The lid-close settings that were in force before we changed them.
 ///
-/// Persisted alongside the session so a launch-time recovery pass can restore
-/// them even if the process was killed outright.
+/// Records the scheme they came from: the user can switch power plans while a
+/// hold is active, and restoring the old values into whatever is active *now*
+/// would both corrupt that plan and strand the one we actually modified.
+///
+/// Written to disk as soon as the change is made, because this is the only
+/// copy of the user's original settings. A hard kill would otherwise leave
+/// `LIDACTION` set to "do nothing" permanently, with nothing left to restore
+/// from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedLidAction {
+    /// The scheme GUID these values belong to, as a `u128` so it can be
+    /// serialised.
+    pub scheme: u128,
     pub on_ac: u32,
     pub on_battery: u32,
+}
+
+/// Where the recovery record lives, next to the session file.
+fn recovery_path() -> Result<PathBuf> {
+    Ok(crate::config::config_dir()?.join("windows-lid-action.json"))
+}
+
+fn write_recovery(saved: &SavedLidAction) -> Result<()> {
+    let path = recovery_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| LidError::io("create", parent, error))?;
+    }
+    let encoded = serde_json::to_string_pretty(saved).map_err(|source| LidError::Decode {
+        path: path.clone(),
+        source,
+    })?;
+    fs::write(&path, encoded).map_err(|error| LidError::io("write", &path, error))
+}
+
+fn read_recovery() -> Option<SavedLidAction> {
+    let path = recovery_path().ok()?;
+    let raw = fs::read_to_string(&path).ok()?;
+    match serde_json::from_str(&raw) {
+        Ok(saved) => Some(saved),
+        Err(error) => {
+            warn!(path = %path.display(), %error, "discarding malformed lid recovery record");
+            None
+        }
+    }
+}
+
+fn clear_recovery() {
+    if let Ok(path) = recovery_path() {
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => warn!(path = %path.display(), %error, "could not clear recovery record"),
+        }
+    }
 }
 
 pub struct PowerSchemeLidGuard {
@@ -51,19 +102,18 @@ pub struct PowerSchemeLidGuard {
 }
 
 impl PowerSchemeLidGuard {
+    /// Adopts any recovery record a previous run left behind, so a hold
+    /// stranded by a hard kill can be released by `release()` or by the
+    /// session controller's launch reconciliation.
     pub fn new() -> Self {
-        Self { saved: None }
+        let saved = read_recovery();
+        if saved.is_some() {
+            warn!("found a lid recovery record from a previous run");
+        }
+        Self { saved }
     }
 
-    /// Undoes a hold recorded by a previous run that did not exit cleanly.
-    pub fn restore_from(saved: SavedLidAction) -> Result<()> {
-        let scheme = active_scheme()?;
-        write_lid_action(&scheme, saved.on_ac, saved.on_battery)?;
-        debug!(?saved, "restored lid action from a previous run");
-        Ok(())
-    }
-
-    /// The values to persist so a crash can be recovered from.
+    /// The values that would be restored on release, if any.
     pub fn saved(&self) -> Option<SavedLidAction> {
         self.saved
     }
@@ -84,8 +134,26 @@ impl LidPowerBackend for PowerSchemeLidGuard {
         let scheme = active_scheme()?;
         let saved = read_lid_action(&scheme)?;
 
-        write_lid_action(&scheme, LID_ACTION_DO_NOTHING, LID_ACTION_DO_NOTHING)?;
-        set_execution_state(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)?;
+        // Persist before changing anything: if the process dies between the
+        // write and the record, the user's original settings are gone.
+        write_recovery(&saved)?;
+
+        if let Err(error) = write_lid_action(&scheme, LID_ACTION_DO_NOTHING, LID_ACTION_DO_NOTHING)
+        {
+            clear_recovery();
+            return Err(error);
+        }
+
+        // A failure here has already changed the lid action, so undo it rather
+        // than leaving the machine permanently configured not to sleep.
+        if let Err(error) = set_execution_state(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) {
+            if let Err(rollback) = write_lid_action(&scheme, saved.on_ac, saved.on_battery) {
+                warn!(%rollback, "could not roll back the lid action after a failed hold");
+            } else {
+                clear_recovery();
+            }
+            return Err(error);
+        }
 
         self.saved = Some(saved);
         debug!(?saved, "lid action held; previous values saved");
@@ -93,7 +161,10 @@ impl LidPowerBackend for PowerSchemeLidGuard {
     }
 
     fn release(&mut self) -> Result<()> {
-        let Some(saved) = self.saved.take() else {
+        // Read without taking: if any step below fails, the record is the only
+        // way back to the user's original settings and must survive for the
+        // next attempt or for `Drop`.
+        let Some(saved) = self.saved else {
             return Ok(());
         };
 
@@ -101,8 +172,14 @@ impl LidPowerBackend for PowerSchemeLidGuard {
         // scheme cannot also leave the machine pinned awake.
         set_execution_state(ES_CONTINUOUS)?;
 
-        let scheme = active_scheme()?;
+        // Restore into the scheme the values came from, not whatever is active
+        // now: the user may have switched power plans mid-hold.
+        let scheme = GUID::from_u128(saved.scheme);
         write_lid_action(&scheme, saved.on_ac, saved.on_battery)?;
+
+        // Only now is it safe to forget.
+        self.saved = None;
+        clear_recovery();
         debug!(?saved, "lid action restored");
         Ok(())
     }
@@ -175,7 +252,11 @@ fn read_lid_action(scheme: &GUID) -> Result<SavedLidAction> {
     };
     check(WIN32_ERROR(status), "read the on-battery lid action")?;
 
-    Ok(SavedLidAction { on_ac, on_battery })
+    Ok(SavedLidAction {
+        scheme: scheme.to_u128(),
+        on_ac,
+        on_battery,
+    })
 }
 
 fn write_lid_action(scheme: &GUID, on_ac: u32, on_battery: u32) -> Result<()> {
