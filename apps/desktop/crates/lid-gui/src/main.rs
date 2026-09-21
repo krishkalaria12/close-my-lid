@@ -5,8 +5,8 @@
 //! is pinned exactly because gpui is pre-1.0 and breaks between minor
 //! releases; see `apps/desktop/README.md`.
 //!
-//! macOS keeps its own Swift app in `apps/macos`. This binary also builds on
-//! macOS purely so the panel can be iterated on from a Mac.
+//! macOS has its own AppKit app in the `lid-macos` crate; both are shells over
+//! the same `lidcore`.
 //!
 //! Hides the console window on Windows release builds.
 #![cfg_attr(
@@ -14,12 +14,14 @@
     windows_subsystem = "windows"
 )]
 
-// The tray app is Windows-only (macOS builds exist solely to iterate on the
-// panel from a Mac). Linux has no tray to anchor to — the CLI is the product
-// there — and `Cargo.toml` intentionally provides no gpui dependency for it,
-// so fail here with a clear message instead of a wall of missing-crate errors.
-#[cfg(target_os = "linux")]
-compile_error!("lid-gui is Windows-only; on Linux use the `close-my-lid` CLI");
+// The tray app is Windows-only. Linux has no tray to anchor to — the CLI is
+// the product there — and macOS has `lid-macos`. `Cargo.toml` intentionally
+// provides no gpui dependency for either, so fail here with a clear message
+// instead of a wall of missing-crate errors.
+#[cfg(not(target_os = "windows"))]
+compile_error!(
+    "lid-gui is Windows-only; use `lid-macos` on macOS and the `close-my-lid` CLI on Linux"
+);
 
 mod anchor;
 mod config;

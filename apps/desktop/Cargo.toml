@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/lidcore", "crates/lid-cli", "crates/lid-gui"]
+members = ["crates/lidcore", "crates/lid-cli", "crates/lid-gui", "crates/lid-macos"]
 
 [workspace.package]
 version = "0.4.4"
@@ -28,6 +28,17 @@ ctrlc = "3.5.2"
 # macOS: `lidcore` takes its process snapshot through libproc and sysctl
 # rather than sysinfo, which needs the raw bindings.
 libc = "0.2.189"
+
+# macOS: the menu bar app talks to AppKit directly through objc2, so the whole
+# product is Rust and needs no Xcode toolchain to build.
+objc2 = "0.6.4"
+objc2-foundation = "0.3.2"
+objc2-app-kit = "0.3.2"
+objc2-user-notifications = "0.3.2"
+objc2-service-management = "0.3.2"
+objc2-core-foundation = "0.3.2"
+objc2-quartz-core = "0.3.2"
+block2 = "0.6.2"
 
 # Linux: logind inhibitor over the system bus.
 zbus = "5.19.0"
