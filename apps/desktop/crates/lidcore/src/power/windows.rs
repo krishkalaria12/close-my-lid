@@ -402,6 +402,30 @@ fn set_execution_state(state: EXECUTION_STATE) -> Result<()> {
     Ok(())
 }
 
+/// The `*DCValueIndex` calls return a bare `u32` while their `*ACValueIndex`
+/// counterparts return `WIN32_ERROR`; callers wrap the former so this takes one
+/// type.
+fn check(status: WIN32_ERROR, what: &str) -> Result<()> {
+    if status.0 == 0 {
+        return Ok(());
+    }
+
+    let error = windows::core::Error::from_hresult(status.to_hresult());
+
+    // ERROR_ACCESS_DENIED on a managed machine is the realistic failure here.
+    if status == WIN32_ERROR(5) {
+        return Err(
+            LidError::denied(what.to_string(), error.to_string()).with_hint(
+                "The active power scheme may be managed by group policy. Check with \
+             `powercfg /getactivescheme`, or ask your administrator to allow \
+             changing the lid-close action.",
+            ),
+        );
+    }
+
+    Err(LidError::backend(what.to_string(), error.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,28 +453,4 @@ mod tests {
         assert!(!guard.is_owner());
         assert!(guard.saved().is_none());
     }
-}
-
-/// The `*DCValueIndex` calls return a bare `u32` while their `*ACValueIndex`
-/// counterparts return `WIN32_ERROR`; callers wrap the former so this takes one
-/// type.
-fn check(status: WIN32_ERROR, what: &str) -> Result<()> {
-    if status.0 == 0 {
-        return Ok(());
-    }
-
-    let error = windows::core::Error::from_hresult(status.to_hresult());
-
-    // ERROR_ACCESS_DENIED on a managed machine is the realistic failure here.
-    if status == WIN32_ERROR(5) {
-        return Err(
-            LidError::denied(what.to_string(), error.to_string()).with_hint(
-                "The active power scheme may be managed by group policy. Check with \
-             `powercfg /getactivescheme`, or ask your administrator to allow \
-             changing the lid-close action.",
-            ),
-        );
-    }
-
-    Err(LidError::backend(what.to_string(), error.to_string()))
 }
