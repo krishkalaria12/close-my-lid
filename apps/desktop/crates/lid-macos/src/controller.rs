@@ -113,7 +113,6 @@ impl Controller {
     }
 
     pub fn start(&mut self, duration: SessionDuration) -> Result<()> {
-        let now = Utc::now();
         self.session.start(duration)?;
 
         if let Err(error) = prefs::save(duration) {
@@ -121,7 +120,15 @@ impl Controller {
             warn!(%error, "could not remember the chosen duration");
         }
         self.record_heartbeat();
-        self.notifier.apply(&notify::plan(duration, now));
+
+        // Planned from the session's own start, not from before the call that
+        // took the hold. Applying `pmset` can sit behind an administrator
+        // prompt for as long as the user takes to type a password, and a plan
+        // built on the earlier instant would announce the session's end that
+        // much before it actually ended.
+        let started_at = self.session.state().started_at().unwrap_or_else(Utc::now);
+        self.notifier.apply(&notify::plan(duration, started_at));
+
         self.was_active = true;
         self.install_watchdog_if_granted();
         Ok(())
