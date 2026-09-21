@@ -1,0 +1,4 @@
+# Pinned so a pre-1.0 dependency tree stays reproducible.
+[toolchain]
+channel = "1.95.0"
+components = ["rustfmt", "clippy"]

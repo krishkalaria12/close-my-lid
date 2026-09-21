@@ -1,0 +1,17 @@
+[package]
+name = "lidcore"
+description = "Platform-agnostic core for Close My Lid: hold state machine, persistence, agent detection, and per-OS lid power backends."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+directories.workspace = true
+tracing.workspace = true
