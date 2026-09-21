@@ -13,6 +13,20 @@ use crate::error::{LidError, Result};
 
 /// Reverse-DNS identifier: the single-instance lock, the config directory and
 /// the systemd user unit all derive from this.
+///
+/// Deliberately *not* the macOS bundle identifier, which is
+/// `app.closemylid.CloseMyLid` — see `scripts/package-macos-app.sh`. The two
+/// have always differed, and changing either is a migration rather than a
+/// tidy-up: the bundle identifier is what the notification authorization,
+/// the `SMAppService` login item registration and Gatekeeper's record of the
+/// app are all keyed on, and this one is what names the directory holding a
+/// live hold's state. Renaming the bundle would re-prompt every existing
+/// install for notification permission and drop its login item; renaming this
+/// would strand the session file that lets a hold be released after a crash.
+///
+/// The watchdog LaunchAgent is a third name again (`app.closemylid.watchdog`,
+/// in `launchd`), matching the bundle's namespace, and its path is what makes
+/// replacing `/Applications/Close My Lid.app` a drop-in swap.
 pub const APP_ID: &str = "com.krishkalaria.close-my-lid";
 
 /// Human-facing app name, used in notifications and CLI output.
