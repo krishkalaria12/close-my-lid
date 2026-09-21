@@ -73,7 +73,7 @@ define_class!(
         #[unsafe(method(applicationWillTerminate:))]
         fn will_terminate(&self, _notification: &NSNotification) {
             with_app(|app| {
-                if let Err(error) = app.controller.borrow_mut().stop() {
+                if let Err(error) = app.controller.borrow_mut().stop_if_holding() {
                     warn!(%error, "could not release the hold while quitting");
                 }
             });

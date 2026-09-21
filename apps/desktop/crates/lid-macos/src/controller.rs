@@ -142,6 +142,20 @@ impl Controller {
         Ok(())
     }
 
+    /// Releases the hold only if one is actually recorded.
+    ///
+    /// Used on the way out. An unconditional release would run `sudo -n pmset
+    /// … 0` on every quit, and without the passwordless grant that escalates
+    /// to an administrator dialog — asking for a password to undo something
+    /// the app never did, during termination, when macOS is already counting
+    /// down to killing it.
+    pub fn stop_if_holding(&mut self) -> Result<()> {
+        if !self.session.state().is_active() {
+            return Ok(());
+        }
+        self.stop()
+    }
+
     // MARK: reconciliation
 
     /// True while a hold is waiting to be reasserted after a wake.
