@@ -51,9 +51,19 @@ jobs:
           ruby scripts/validate-release-instructions-test.rb
           ruby scripts/validate-release-instructions.rb
 
-      - name: Package macOS app
+      # Added from inside the workspace, because `apps/desktop/rust-toolchain.toml`
+      # pins the toolchain. Run from the repository root this installs the
+      # targets into the *default* toolchain instead, and the packaging build —
+      # which runs under the pinned one — then fails with "can't find crate for
+      # `std`" for a target rustup has just reported adding successfully.
+      - name: Install the Apple targets
+        working-directory: apps/desktop
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          rustup target list --installed
+
+      - name: Package macOS app
+        run: |
           ./scripts/package-macos-app.sh
           plutil -lint "dist/macos/Close My Lid.app/Contents/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' 'dist/macos/Close My Lid.app/Contents/Info.plist')" = "true"

@@ -42,8 +42,24 @@ APP_DIR="$OUTPUT_DIR/$APP_NAME.app"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 UNIVERSAL="${UNIVERSAL:-auto}"
 
-installed_targets="$(rustup target list --installed 2>/dev/null || true)"
-have_target() { grep -qx "$1" <<<"$installed_targets"; }
+# The workspace pins its toolchain in `apps/desktop/rust-toolchain.toml`, so
+# every rustup and cargo question has to be asked from inside it. Asked from
+# the repository root they answer for the *default* toolchain instead, which is
+# how `rustup target add x86_64-apple-darwin` can succeed and the build still
+# fail with "can't find crate for `std`": the target was added to one toolchain
+# and the build ran under another.
+cd "$WORKSPACE_DIR"
+
+# Whether a target can actually be built for, rather than whether rustup lists
+# it. Asking the compiler where the target's libraries live, and looking, is
+# the check that matches what the build is about to attempt — and, run from
+# here, it asks about the pinned toolchain that will do the attempting.
+have_target() {
+  local libdir
+  libdir="$(rustc --print target-libdir --target "$1" 2>/dev/null)" || return 1
+  [[ -n "$libdir" && -d "$libdir" ]] || return 1
+  compgen -G "$libdir/libstd-*.rlib" >/dev/null
+}
 
 if [[ "$UNIVERSAL" == "auto" ]]; then
   if have_target aarch64-apple-darwin && have_target x86_64-apple-darwin; then
@@ -51,11 +67,21 @@ if [[ "$UNIVERSAL" == "auto" ]]; then
   else
     UNIVERSAL=0
     echo "note: building for the host architecture only." >&2
-    echo "      run 'rustup target add aarch64-apple-darwin x86_64-apple-darwin' for a universal build." >&2
+    echo "      run 'rustup target add aarch64-apple-darwin x86_64-apple-darwin'" >&2
+    echo "      from $WORKSPACE_DIR for a universal build." >&2
   fi
+elif [[ "$UNIVERSAL" == "1" ]]; then
+  # Asked for explicitly, as a release build does: say which target is missing
+  # rather than letting the build fail on it a minute later.
+  for target in aarch64-apple-darwin x86_64-apple-darwin; do
+    if ! have_target "$target"; then
+      echo "error: UNIVERSAL=1 needs the $target standard library, which the" >&2
+      echo "       toolchain pinned in $WORKSPACE_DIR does not have." >&2
+      echo "       run 'rustup target add $target' from that directory." >&2
+      exit 1
+    fi
+  done
 fi
-
-cd "$WORKSPACE_DIR"
 
 if [[ "$UNIVERSAL" == "1" ]]; then
   for target in aarch64-apple-darwin x86_64-apple-darwin; do
