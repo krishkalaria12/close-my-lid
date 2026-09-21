@@ -14,7 +14,25 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKSPACE_DIR="$ROOT_DIR/apps/desktop"
 PROFILE="${PROFILE:-release}"
-VERSION="${VERSION:-0.4.4}"
+
+# Read from the workspace rather than repeated here. The binary takes its own
+# version from CARGO_PKG_VERSION and compares it against the release feed, so a
+# hardcoded copy that missed a bump would ship a bundle whose Info.plist,
+# `--version` and update notice all disagreed.
+workspace_version() {
+  awk '/^\[workspace\.package\]/ { in_section = 1; next }
+       /^\[/                       { in_section = 0 }
+       in_section && /^version[[:space:]]*=/ {
+         gsub(/[^0-9A-Za-z.+-]/, "", $3); print $3; exit
+       }' "$WORKSPACE_DIR/Cargo.toml"
+}
+
+VERSION="${VERSION:-$(workspace_version)}"
+if [[ -z "$VERSION" ]]; then
+  echo "error: could not read the version from $WORKSPACE_DIR/Cargo.toml" >&2
+  exit 1
+fi
+
 BUILD_VERSION="${BUILD_VERSION:-8}"
 APP_NAME="Close My Lid"
 EXECUTABLE_NAME="CloseMyLid"
@@ -95,6 +113,16 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# The bundle claims a version; the binary inside it has its own. A release
+# whose Info.plist and `--version` disagree sends people the wrong update
+# notice, so catch it here rather than after it has shipped.
+built_version="$("$APP_DIR/Contents/MacOS/$EXECUTABLE_NAME" --version | awk '{ print $NF }')"
+if [[ "$built_version" != "$VERSION" ]]; then
+  echo "error: the bundle says $VERSION but the binary reports $built_version." >&2
+  echo "       VERSION must match [workspace.package] version in apps/desktop/Cargo.toml." >&2
+  exit 1
+fi
 
 if command -v codesign >/dev/null; then
   codesign_args=(--force --sign "$CODE_SIGN_IDENTITY")

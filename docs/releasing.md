@@ -20,9 +20,11 @@ Releases are signed with a Developer ID Application identity and notarized by Ap
 
 The feed carries no signature of its own for new items. Nothing verifies one, because nothing is fetched and executed from the feed — `scripts/validate-appcast.rb` explains the reasoning in full.
 
+What does still matter is *where* an item points. The app refuses to open an enclosure URL that is not under `https://github.com/krishkalaria12/close-my-lid/releases/`, and `scripts/validate-appcast.rb` refuses to pass a feed containing one, so a tampered feed cannot send anyone somewhere else.
+
 ## Publish an update
 
-1. Increase `VERSION` and the monotonically increasing integer `BUILD_VERSION`.
+1. Increase the `version` under `[workspace.package]` in `apps/desktop/Cargo.toml`, and the monotonically increasing integer `BUILD_VERSION`. The packaging script reads the version from that manifest — the same place the binary gets its own `--version` and the one it compares against this feed — and refuses to package a bundle whose `Info.plist` and executable disagree. Set `VERSION` in the environment only to override it deliberately.
 2. Build with a Developer ID identity. Ad-hoc signing is only for local validation. The packaging script produces a universal binary when both Apple targets are installed:
 
 ```bash
