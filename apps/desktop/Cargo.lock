@@ -2223,7 +2223,7 @@ version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbc773e24e02d4ddd8395fd30dc147524273a83e54e0f312d986ea30de5f5646"
 dependencies = [
- "roxmltree",
+ "roxmltree 0.20.0",
 ]
 
 [[package]]
@@ -3282,6 +3282,7 @@ version = "0.4.4"
 dependencies = [
  "block2",
  "chrono",
+ "dispatch2",
  "lidcore",
  "objc2",
  "objc2-app-kit",
@@ -3291,6 +3292,7 @@ dependencies = [
  "objc2-service-management",
  "objc2-user-notifications",
  "tracing",
+ "tracing-oslog",
  "tracing-subscriber",
 ]
 
@@ -3301,10 +3303,15 @@ dependencies = [
  "chrono",
  "directories",
  "libc",
+ "objc2-core-foundation",
+ "plist",
+ "roxmltree 0.21.1",
+ "semver",
  "serde",
  "serde_json",
  "starship-battery",
  "sysinfo 0.39.6",
+ "tempfile",
  "thiserror 2.0.20",
  "tracing",
  "windows 0.62.2",
@@ -5032,6 +5039,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "rust-embed"
 version = "8.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6429,6 +6445,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-oslog"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d76902d2a8d5f9f55a81155c08971734071968c90f2d9bfe645fe700579b2950"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "tracing-core",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-subscriber"
 version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6623,7 +6651,7 @@ dependencies = [
  "kurbo",
  "log",
  "pico-args",
- "roxmltree",
+ "roxmltree 0.20.0",
  "rustybuzz 0.20.1",
  "simplecss",
  "siphasher",

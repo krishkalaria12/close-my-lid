@@ -25,6 +25,14 @@ starship-battery = "0.11.1"
 clap = { version = "4.6.7", features = ["derive"] }
 ctrlc = "3.5.2"
 
+# Version comparison for update discovery. Hand-rolled dotted comparison got
+# prereleases backwards: `0.5.0-beta.1` read as newer than `0.5.0`.
+semver = "1.0.28"
+
+# Atomic state writes: the app and the once-a-minute watchdog share a
+# directory, and a torn `fs::write` reads back as "no session".
+tempfile = "3.27.0"
+
 # macOS: `lidcore` takes its process snapshot through libproc and sysctl
 # rather than sysinfo, which needs the raw bindings.
 libc = "0.2.189"
@@ -39,6 +47,19 @@ objc2-service-management = "0.3.2"
 objc2-core-foundation = "0.3.2"
 objc2-quartz-core = "0.3.2"
 block2 = "0.6.2"
+
+# macOS: GCD, so a blocking read runs on a shared global queue and its answer
+# is posted back to the main queue — no thread spawned per reconciliation.
+dispatch2 = "0.3.1"
+
+# macOS: stderr from a bundle launched by LaunchServices goes nowhere, so the
+# app logs to the unified log where `log stream` and Console can see it.
+tracing-oslog = "0.3.0"
+
+# macOS: the watchdog LaunchAgent plist and the appcast, parsed and written by
+# libraries rather than by `format!` and `str::find`.
+plist = "1.10.1"
+roxmltree = "0.21.1"
 
 # Linux: logind inhibitor over the system bus.
 zbus = "5.19.0"

@@ -26,3 +26,5 @@ objc2-service-management.workspace = true
 objc2-core-foundation.workspace = true
 objc2-quartz-core.workspace = true
 block2.workspace = true
+dispatch2.workspace = true
+tracing-oslog.workspace = true
