@@ -1,0 +1,79 @@
+name: ci-desktop
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/desktop/**", ".github/workflows/ci-desktop.yml"]
+  pull_request:
+    paths: ["apps/desktop/**", ".github/workflows/ci-desktop.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: apps/desktop
+
+jobs:
+  core:
+    # lidcore is platform-agnostic, so it is tested everywhere — including
+    # macOS, where the UnsupportedBackend path must keep compiling so the
+    # workspace stays usable from a Mac.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Test lidcore
+        run: cargo test -p lidcore
+
+      - name: Lint lidcore
+        run: cargo clippy -p lidcore -- -D warnings
+
+  cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build the CLI
+        run: cargo build -p lid-cli
+
+      - name: Smoke test the CLI
+        # `agents` and `--help` need no privileges, unlike enable/disable.
+        run: |
+          cargo run -p lid-cli -- --version
+          cargo run -p lid-cli -- agents --json
+          cargo run -p lid-cli -- systemd
+
+  gui:
+    # Windows only: the tray app is not shipped on Linux, where stock GNOME
+    # has no tray and Wayland will not anchor a panel to one.
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build the tray app
+        run: cargo build -p lid-gui
+
+  format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
