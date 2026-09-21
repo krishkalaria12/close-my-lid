@@ -13,6 +13,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use serde::Serialize;
+
 use crate::error::{LidError, Result};
 
 pub const LABEL: &str = "app.closemylid.watchdog";
@@ -52,7 +54,10 @@ pub fn install() -> Result<()> {
     }
 
     let xml = plist_xml(&executable, LABEL);
-    fs::write(&plist, xml).map_err(|error| LidError::io("write", &plist, error))?;
+    // Atomic, because launchd is told to load this the moment it exists and a
+    // half-written plist is one it refuses without saying so. 0644 to match
+    // every other agent in the directory.
+    crate::atomic::write_with_mode(&plist, &xml, crate::atomic::READABLE)?;
 
     // Refresh any stale registration that points at an older binary.
     bootout();
@@ -111,39 +116,38 @@ unsafe extern "C" {
     fn getuid() -> u32;
 }
 
-pub fn plist_xml(executable_path: &str, label: &str) -> String {
-    fn escaped(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-    }
+/// The agent's property list, as launchd reads it.
+///
+/// Built through the `plist` crate rather than a format string: an executable
+/// path is arbitrary user-controlled text, and a bundle whose name contains
+/// `&` or `<` would otherwise produce a plist launchd silently refuses to
+/// load, leaving the dead-man switch installed but inert.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct AgentPlist {
+    label: String,
+    program_arguments: Vec<String>,
+    start_interval: u64,
+    /// Never at load: the watchdog only has work to do once a hold exists, and
+    /// launchd runs it on the interval regardless.
+    run_at_load: bool,
+    /// Background: the pass is a couple of syscalls and must not compete with
+    /// whatever the user is doing.
+    process_type: String,
+}
 
-    format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
-         <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
-         <plist version=\"1.0\">\n\
-         <dict>\n\
-           <key>Label</key>\n\
-           <string>{}</string>\n\
-           <key>ProgramArguments</key>\n\
-           <array>\n\
-             <string>{}</string>\n\
-             <string>{}</string>\n\
-           </array>\n\
-           <key>StartInterval</key>\n\
-           <integer>{}</integer>\n\
-           <key>RunAtLoad</key>\n\
-           <false/>\n\
-           <key>ProcessType</key>\n\
-           <string>Background</string>\n\
-         </dict>\n\
-         </plist>\n",
-        escaped(label),
-        escaped(executable_path),
-        WATCHDOG_ARG,
-        START_INTERVAL_SECONDS,
-    )
+pub fn plist_xml(executable_path: &str, label: &str) -> String {
+    let agent = AgentPlist {
+        label: label.to_string(),
+        program_arguments: vec![executable_path.to_string(), WATCHDOG_ARG.to_string()],
+        start_interval: START_INTERVAL_SECONDS,
+        run_at_load: false,
+        process_type: "Background".to_string(),
+    };
+
+    let mut xml = Vec::new();
+    plist::to_writer_xml(&mut xml, &agent).expect("an agent plist always serialises");
+    String::from_utf8(xml).expect("the plist writer emits UTF-8")
 }
 
 #[cfg(test)]
@@ -170,6 +174,24 @@ mod tests {
         let xml = plist_xml("/tmp/a&b<App>.app/x", "a<b>&c");
         assert!(xml.contains("a&lt;b&gt;&amp;c"), "{xml}");
         assert!(xml.contains("/tmp/a&amp;b&lt;App&gt;.app/x"), "{xml}");
+    }
+
+    #[test]
+    fn an_awkwardly_named_bundle_still_produces_a_loadable_plist() {
+        // launchd refuses a malformed plist silently, which would leave the
+        // dead-man switch installed but never firing.
+        let path = "/Applications/Ben & Jerry's <Lid>.app/Contents/MacOS/CloseMyLid";
+        let xml = plist_xml(path, LABEL);
+
+        let parsed: plist::Value = plist::from_bytes(xml.as_bytes()).expect("valid plist");
+        let dictionary = parsed.as_dictionary().expect("a dict at the root");
+        let arguments = dictionary["ProgramArguments"]
+            .as_array()
+            .expect("an argument array");
+        assert_eq!(arguments[0].as_string(), Some(path));
+        assert_eq!(arguments[1].as_string(), Some(WATCHDOG_ARG));
+        assert_eq!(dictionary["StartInterval"].as_unsigned_integer(), Some(60));
+        assert_eq!(dictionary["RunAtLoad"].as_boolean(), Some(false));
     }
 
     #[test]
