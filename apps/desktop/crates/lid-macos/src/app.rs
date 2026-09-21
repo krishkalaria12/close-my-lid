@@ -2,15 +2,19 @@
 //! connects the panel's controls to [`Controller`].
 //!
 //! Carried over from the Swift app's `AppDelegate` + `StatusMenuController`.
-//! Everything here runs on the main thread; the two things that must not —
-//! reading `pmset` and fetching the release feed, both of which block — are
-//! run on a worker and posted back through [`on_main`].
+//! Everything here runs on the main thread. The two things that must not —
+//! reading the system hold, which can fall back to a forked `pmset`, and
+//! fetching the release feed — go through GCD: a shared global queue does the
+//! work and the answer is posted back through [`on_main`]. A dispatch hop
+//! costs nothing next to the thread-per-reconciliation this used to spawn,
+//! forever, for as long as the app runs.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
 use block2::RcBlock;
+use dispatch2::{DispatchQoS, DispatchQueue, GlobalQueueIdentifier};
 use lidcore::{LidError, SessionDuration, VERSION};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -20,8 +24,8 @@ use objc2_app_kit::{
     NSStatusBar, NSStatusItem, NSVariableStatusItemLength, NSWorkspace,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSOperationQueue, NSRunLoop,
-    NSRunLoopCommonModes, NSString, NSTimer,
+    MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSRunLoop, NSRunLoopCommonModes,
+    NSString, NSTimer,
 };
 use tracing::{debug, warn};
 
@@ -409,10 +413,13 @@ fn make_status_item(mtm: MainThreadMarker) -> Retained<NSStatusItem> {
     item
 }
 
-/// Reads the system hold on a worker thread and delivers the answer on the
-/// main thread. `None` means the read itself failed.
+/// Reads the system hold off the main thread and delivers the answer on it.
+/// `None` means the read itself failed.
+///
+/// The read is usually a single IOKit call, but it falls back to forking
+/// `pmset -g`, and the main thread must not be the one waiting on that.
 fn schedule_system_read(deliver: impl FnOnce(Option<bool>) + Send + 'static) {
-    std::thread::spawn(move || {
+    background(move || {
         let held = controller::read_system_hold()
             .inspect_err(|error| debug!(%error, "could not read the closed-lid sleep setting"))
             .ok();
@@ -420,15 +427,21 @@ fn schedule_system_read(deliver: impl FnOnce(Option<bool>) + Send + 'static) {
     });
 }
 
-/// Runs `body` on the main thread. The block runs once and then releases.
-fn on_main(body: impl FnOnce() + Send + 'static) {
-    let body = RefCell::new(Some(body));
-    let block = RcBlock::new(move || {
-        if let Some(body) = body.borrow_mut().take() {
-            body();
-        }
-    });
-    unsafe { NSOperationQueue::mainQueue().addOperationWithBlock(&block) };
+/// Runs `body` on a shared global queue.
+///
+/// Utility: none of this is work the user is waiting on, and the class tells
+/// the scheduler it may be coalesced with other background work rather than
+/// waking a core on its own.
+pub fn background(body: impl FnOnce() + Send + 'static) {
+    DispatchQueue::global_queue(GlobalQueueIdentifier::QualityOfService(
+        DispatchQoS::Utility,
+    ))
+    .exec_async(body);
+}
+
+/// Runs `body` on the main thread.
+pub fn on_main(body: impl FnOnce() + Send + 'static) {
+    DispatchQueue::main().exec_async(body);
 }
 
 /// A repeating timer registered in the common run loop modes, so it keeps

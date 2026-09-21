@@ -6,6 +6,7 @@
 //! into this, and the panel reads back out of it.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use chrono::{DateTime, Utc};
@@ -54,6 +55,10 @@ pub struct Controller {
 /// collapse the panel refresh and the reconciliation pass into one read when
 /// their timers coincide.
 const BATTERY_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Set while a watchdog registration is running on a background queue, so a
+/// reconciliation pass that lands mid-install does not start a second one.
+static INSTALLING_WATCHDOG: AtomicBool = AtomicBool::new(false);
 
 impl Controller {
     pub fn new() -> Result<Self> {
@@ -331,13 +336,28 @@ impl Controller {
     /// Registers the dead-man LaunchAgent once the passwordless grant exists.
     /// Without the grant the agent could not release anything anyway, and
     /// installing it early would only leave a job that fails every minute.
+    ///
+    /// The test is two `stat` calls and stays here; the registration itself
+    /// shells out to `launchctl` twice and goes to a background queue, because
+    /// this runs from the reconciliation pass and the main thread is the one
+    /// drawing the panel.
     pub fn install_watchdog_if_granted(&self) {
         if !sudoers::is_installed() || launchd::is_installed() {
             return;
         }
-        if let Err(error) = launchd::install() {
-            warn!(%error, "could not register the watchdog agent");
+        if INSTALLING_WATCHDOG.swap(true, Ordering::SeqCst) {
+            // A registration from an earlier pass has not finished; the file
+            // it writes is what makes `is_installed` true, so without this
+            // every pass in between would start another one.
+            return;
         }
+
+        crate::app::background(|| {
+            if let Err(error) = launchd::install() {
+                warn!(%error, "could not register the watchdog agent");
+            }
+            INSTALLING_WATCHDOG.store(false, Ordering::SeqCst);
+        });
     }
 
     /// When a timed hold is due to end, so the app can release it on the
@@ -349,8 +369,9 @@ impl Controller {
 
 /// Asks the OS whether closed-lid sleep is currently held.
 ///
-/// Spawns `pmset -g`, so it is run on a worker thread and the answer posted
-/// back to the main queue; see `app::schedule_system_read`.
+/// Normally one IOKit call, but it falls back to spawning `pmset -g`, so it is
+/// run off the main thread and the answer posted back; see
+/// `app::schedule_system_read`.
 pub fn read_system_hold() -> Result<bool> {
     use lidcore::LidPowerBackend;
 
