@@ -12,7 +12,9 @@ use crate::state::SleepControlState;
 /// Reads are deliberately forgiving: a corrupt file is treated as "no session"
 /// rather than a hard error, because the app is what releases a stranded hold
 /// and must always be able to start. Writes are strict — silently failing to
-/// record a hold would leave nothing to recover from.
+/// record a hold would leave nothing to recover from — and atomic, so a
+/// process that dies mid-save cannot turn a live session into a truncated
+/// file that reads back as "no session".
 #[derive(Debug, Clone)]
 pub struct SleepSessionStore {
     path: PathBuf,
@@ -75,16 +77,12 @@ impl SleepSessionStore {
     }
 
     pub fn save(&self, state: &SleepControlState) -> Result<()> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|error| LidError::io("create", parent, error))?;
-        }
-
         let encoded = serde_json::to_string_pretty(state).map_err(|source| LidError::Encode {
             path: self.path.clone(),
             source,
         })?;
 
-        fs::write(&self.path, encoded).map_err(|error| LidError::io("write", &self.path, error))
+        crate::atomic::write(&self.path, &encoded)
     }
 
     pub fn clear(&self) -> Result<()> {

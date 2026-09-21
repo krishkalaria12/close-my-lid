@@ -14,6 +14,7 @@
 //! hint.
 
 pub mod agents;
+mod atomic;
 pub mod battery;
 pub mod config;
 pub mod duration;
