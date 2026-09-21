@@ -14,9 +14,8 @@ defaults:
 
 jobs:
   core:
-    # lidcore is platform-agnostic, so it is tested everywhere — including
-    # macOS, where the UnsupportedBackend path must keep compiling so the
-    # workspace stays usable from a Mac.
+    # lidcore is platform-agnostic, so it is tested on every platform it
+    # ships a backend for.
     strategy:
       fail-fast: false
       matrix:
@@ -38,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-15]
 
     runs-on: ${{ matrix.os }}
 
@@ -54,11 +53,15 @@ jobs:
         run: |
           cargo run -p lid-cli -- --version
           cargo run -p lid-cli -- agents --json
-          cargo run -p lid-cli -- systemd
+
+      - name: Print the systemd unit
+        if: runner.os == 'Linux'
+        run: cargo run -p lid-cli -- systemd
 
   gui:
     # Windows only: the tray app is not shipped on Linux, where stock GNOME
-    # has no tray and Wayland will not anchor a panel to one.
+    # has no tray and Wayland will not anchor a panel to one. macOS has its own
+    # AppKit app in `lid-macos`, covered by `ci.yml`.
     runs-on: windows-latest
 
     steps:
@@ -67,6 +70,18 @@ jobs:
 
       - name: Build the tray app
         run: cargo build -p lid-gui
+
+  menu-bar:
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build and test the menu bar app
+        run: |
+          cargo test -p lid-macos
+          cargo clippy -p lid-macos --all-targets -- -D warnings
 
   format:
     runs-on: ubuntu-latest

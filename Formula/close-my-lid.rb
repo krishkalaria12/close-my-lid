@@ -6,17 +6,13 @@ class CloseMyLid < Formula
   sha256 "e7dc56e606c5838ae7ee1b9ac722f4d75b973feb6ae1ec797da7540601ed9457"
   license "MIT"
 
+  depends_on "rust" => :build
   depends_on macos: :sonoma
 
   def install
-    system "swift", "build",
-      "--package-path", "apps/macos",
-      "--configuration", "release",
-      "--product", "CloseMyLid",
-      "--disable-sandbox"
-    bin.install "apps/macos/.build/release/CloseMyLid" => "close-my-lid"
-    sparkle_framework = buildpath.glob("apps/macos/.build/*-apple-macosx/release/Sparkle.framework").first
-    (prefix/"Frameworks").install sparkle_framework
+    system "cargo", "install", *std_cargo_args(path: "apps/desktop/crates/lid-macos")
+    # The bundle's executable is named for the app; the command is not.
+    bin.install_symlink bin/"CloseMyLid" => "close-my-lid"
   end
 
   test do

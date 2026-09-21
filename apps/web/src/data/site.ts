@@ -22,7 +22,7 @@ export type Agent = {
   icon: string;
 };
 
-/** Mirrors `AgentHarness` in apps/macos/Sources/CloseMyLidCore/AgentHarness.swift. */
+/** Mirrors `AgentHarness` in apps/desktop/crates/lidcore/src/agents/mod.rs. */
 export const agents: Agent[] = [
   { name: "Claude Code", icon: "/agents/claude-code.svg" },
   { name: "OpenAI Codex CLI", icon: "/agents/codex.svg" },

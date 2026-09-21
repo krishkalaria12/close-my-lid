@@ -2,7 +2,9 @@
 
 Close My Lid keeps a Mac awake while coding agents, builds, downloads, and other long-running work continue after the laptop lid is closed.
 
-It ships as a native macOS menu bar app, a `close-my-lid` CLI, a Raycast extension, Homebrew formula/cask packages, and the marketing site.
+It ships as a native macOS menu bar app, a `close-my-lid` CLI for Linux and Windows, a Raycast extension, Homebrew formula/cask packages, and the marketing site.
+
+The whole desktop side is one Rust workspace: a shared `lidcore` crate holds the session state machine, persistence, agent detection and the per-OS lid mechanism, and each platform's interface is a thin shell over it.
 
 ## Install
 
@@ -42,7 +44,7 @@ The GitHub release also includes a zipped `.app` bundle:
 - Low-battery safety release that restores normal sleep at 5% when unplugged
 - Notifications when a hold starts, is about to end, and has ended
 - Launch at Login toggle
-- In-app update checks, installation, and restart
+- Update checks in the panel, with a link to the release
 - Battery Settings shortcut
 - Live session counts for Claude Code, OpenAI Codex CLI, OpenCode, Antigravity, GitHub Copilot CLI, Cursor CLI, and Pi in the menu panel
 - Local session persistence and live `pmset` reconciliation
@@ -70,6 +72,10 @@ close-my-lid disable
 
 Running `close-my-lid` with no arguments launches the menu bar app.
 
+On Linux and Windows the CLI is a fuller tool — `close-my-lid enable --for 2h`,
+`agents`, JSON output, and a `systemd` user unit. See
+[`apps/desktop/README.md`](apps/desktop/README.md).
+
 ## Raycast
 
 The Raycast extension lives in `packages/raycast` and exposes:
@@ -85,7 +91,7 @@ It uses the same `pmset` behavior as the native app and is restricted to macOS i
 The project is organized as a small monorepo so the native app, Raycast extension, Homebrew packages, and future website can share one product direction.
 
 ```text
-apps/macos/        Native macOS menu bar app, CLI, and Swift tests
+apps/desktop/      Rust workspace: shared core, macOS menu bar app, CLI, Windows tray app
 apps/web/          Astro + Tailwind + React marketing site
 packages/raycast/  Raycast extension
 Formula/           Legacy migration copy of the Homebrew CLI formula
@@ -107,20 +113,27 @@ Root scripts proxy to the workspace packages:
 pnpm dev             # run the website locally
 pnpm build           # type-check and build the website
 pnpm raycast:dev     # run the Raycast extension
-pnpm macos:build     # swift build the menu bar app
-pnpm macos:test      # run the Swift test target
+pnpm macos:build     # build the menu bar app
+pnpm macos:test      # run the shared-core and app tests
 pnpm macos:package   # build the .app bundle into dist/macos
 ```
 
-Build and test the Swift package:
+Build and test the Rust workspace:
 
 ```sh
-cd apps/macos
-swift run CloseMyLidCoreTests
-swift build
-swift run CloseMyLid --help
-swift run CloseMyLid
+cd apps/desktop
+cargo test -p lidcore -p lid-macos
+cargo run -p lid-macos -- --help
+cargo run -p lid-macos            # the menu bar app, unbundled
+cargo run -p lid-cli -- agents
 ```
+
+An unbundled build has no bundle identifier, so notifications, Launch at Login
+and the watchdog agent all stand down — everything else works. Package the app
+to exercise those.
+
+Building needs only the Command Line Tools: the app talks to AppKit directly
+through `objc2` and has no Swift or Metal in its toolchain.
 
 Package the menu bar app:
 
@@ -150,7 +163,9 @@ pnpm --filter @close-my-lid/web preview
 
 Product copy, download links and the version shown on the page all come from
 `apps/web/src/data/site.ts`, and the agent marks in `apps/web/public/agents/`
-are the same SVGs the menu panel renders. Update both when cutting a release.
+are the same SVGs the menu panel renders (from
+`apps/desktop/crates/lid-macos/src/assets/`). Update both when cutting a
+release.
 
 The hero shot is `apps/web/src/assets/hero.png`, optimized at build time by
 `astro:assets`. Replace that file to refresh the screenshot; the responsive
