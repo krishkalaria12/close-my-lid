@@ -18,6 +18,7 @@ pub mod battery;
 pub mod duration;
 pub mod error;
 pub mod power;
+pub mod session;
 pub mod state;
 pub mod store;
 
@@ -25,6 +26,7 @@ pub use battery::{BatterySafetyPolicy, BatteryStatus};
 pub use duration::SessionDuration;
 pub use error::LidError;
 pub use power::{LidPowerBackend, backend};
+pub use session::SleepSessionController;
 pub use state::SleepControlState;
 pub use store::SleepSessionStore;
 
