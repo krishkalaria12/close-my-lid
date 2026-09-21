@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/lidcore"]
+members = ["crates/lidcore", "crates/lid-cli"]
 
 [workspace.package]
 version = "0.4.4"
