@@ -14,6 +14,7 @@
 //! [`LidError::UnsupportedPlatform`] there so this crate still builds on a Mac
 //! for development.
 
+pub mod agents;
 pub mod battery;
 pub mod duration;
 pub mod error;
@@ -22,6 +23,7 @@ pub mod session;
 pub mod state;
 pub mod store;
 
+pub use agents::{AgentHarness, RunningProcess, session_counts, sessions_now};
 pub use battery::{BatterySafetyPolicy, BatteryStatus};
 pub use duration::SessionDuration;
 pub use error::LidError;
