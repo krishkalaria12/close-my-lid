@@ -8,14 +8,21 @@
 //! Nothing here may depend on a UI framework. `lid-cli` (Linux's primary
 //! surface) and `lid-gui` (the Windows tray app) are both thin shells over
 //! this crate, which keeps the UI choice reversible.
+//!
+//! macOS is deliberately not implemented here — it is served by the shipping
+//! Swift app in `apps/macos`. [`power::backend`] returns
+//! [`LidError::UnsupportedPlatform`] there so this crate still builds on a Mac
+//! for development.
 
 pub mod duration;
 pub mod error;
+pub mod power;
 pub mod state;
 pub mod store;
 
 pub use duration::SessionDuration;
 pub use error::LidError;
+pub use power::{LidPowerBackend, backend};
 pub use state::SleepControlState;
 pub use store::SleepSessionStore;
 
