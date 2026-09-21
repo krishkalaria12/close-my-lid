@@ -16,12 +16,23 @@
 //! The watchdog uses [`PmsetLidGuard::passwordless`], which never elevates, so
 //! a missing grant can never spawn an administrator dialog from a background
 //! agent.
+//!
+//! Reading, unlike writing, needs no `pmset` at all: `IOPMCopySystemPowerSettings`
+//! hands back the same `SleepDisabled` value the command prints. The app polls
+//! that every reconciliation pass for as long as it runs, so the difference
+//! between a framework call and a forked process is thousands of process
+//! spawns a day. `pmset -g` stays as a fallback for the case where IOKit
+//! answers with nothing.
 
 use std::process::Command;
+
+use tracing::debug;
 
 use crate::error::{LidError, Result};
 use crate::power::LidPowerBackend;
 use crate::sudoers;
+
+mod iokit;
 
 /// Guards closed-lid sleep through `pmset -a disablesleep`.
 pub struct PmsetLidGuard {
@@ -82,6 +93,11 @@ impl LidPowerBackend for PmsetLidGuard {
     }
 
     fn is_held(&self) -> Result<bool> {
+        if let Some(held) = iokit::sleep_disabled() {
+            return Ok(held);
+        }
+
+        debug!("IOKit reported no SleepDisabled setting; falling back to pmset");
         let output = run("/usr/bin/pmset", &["-g"]).map_err(|detail| {
             LidError::backend("read the closed-lid sleep setting", detail).with_hint(
                 "Close My Lid reads this with `/usr/bin/pmset -g`. Check that pmset \
