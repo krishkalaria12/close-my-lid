@@ -2,13 +2,19 @@
 //!
 //! Kept apart from command dispatch so the wording can be tuned without
 //! touching behaviour, and so `--json` stays a stable scripting contract.
+//!
+//! Every function writes through [`line`], which turns a broken pipe into a
+//! typed error instead of a panic — piping into `head` is normal usage.
 
 use std::collections::HashMap;
+use std::io::Write;
 
 use chrono::Utc;
-use lidcore::{AgentHarness, SleepControlState};
+use lidcore::{AgentHarness, SessionDuration, SleepControlState};
 
-pub const SYSTEMD_UNIT: &str = r#"# Save to ~/.config/systemd/user/close-my-lid.service
+use crate::error::{CliError, Result};
+
+const SYSTEMD_UNIT: &str = r#"# Save to ~/.config/systemd/user/close-my-lid.service
 # Then: systemctl --user daemon-reload && systemctl --user start close-my-lid
 #
 # The hold lasts exactly as long as this unit runs, because the logind
@@ -28,7 +34,35 @@ Restart=no
 WantedBy=default.target
 "#;
 
-pub fn status(state: &SleepControlState, backend: &str, json: bool) {
+/// Writes one line to stdout, mapping I/O failures to a typed error.
+pub fn line(text: &str) -> Result<()> {
+    writeln!(std::io::stdout(), "{text}").map_err(CliError::Output)
+}
+
+pub fn systemd_unit() -> Result<()> {
+    print!("{SYSTEMD_UNIT}");
+    std::io::stdout().flush().map_err(CliError::Output)
+}
+
+pub fn hold_started(duration: SessionDuration, backend: &str) -> Result<()> {
+    line(&format!(
+        "{} is holding the lid open ({}).",
+        lidcore::APP_NAME,
+        duration.label()
+    ))?;
+    line(&format!("Mechanism: {backend}."))?;
+    line("Press Ctrl-C to release.")
+}
+
+pub fn hold_expired() -> Result<()> {
+    line("\nSession ended; normal sleep restored.")
+}
+
+pub fn hold_released() -> Result<()> {
+    line("\nReleased. Normal sleep restored.")
+}
+
+pub fn status(state: &SleepControlState, backend: &str, json: bool) -> Result<()> {
     let now = Utc::now();
 
     if json {
@@ -39,18 +73,14 @@ pub fn status(state: &SleepControlState, backend: &str, json: bool) {
             "remaining_seconds": state.remaining(now).map(|left| left.num_seconds()),
             "backend": backend,
         });
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&payload).unwrap_or_default()
-        );
-        return;
+        return line(&serde_json::to_string_pretty(&payload).unwrap_or_default());
     }
 
-    println!("{}", state.summary(now));
-    println!("mechanism: {backend}");
+    line(&state.summary(now))?;
+    line(&format!("mechanism: {backend}"))
 }
 
-pub fn agents(counts: &HashMap<AgentHarness, usize>, json: bool) {
+pub fn agents(counts: &HashMap<AgentHarness, usize>, json: bool) -> Result<()> {
     if json {
         let payload: HashMap<&str, usize> = AgentHarness::ALL
             .iter()
@@ -61,17 +91,11 @@ pub fn agents(counts: &HashMap<AgentHarness, usize>, json: bool) {
                 )
             })
             .collect();
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&payload).unwrap_or_default()
-        );
-        return;
+        return line(&serde_json::to_string_pretty(&payload).unwrap_or_default());
     }
 
-    let working: usize = counts.values().sum();
-    if working == 0 {
-        println!("No agent sessions detected.");
-        return;
+    if counts.values().sum::<usize>() == 0 {
+        return line("No agent sessions detected.");
     }
 
     // Widest name sets the column so the counts line up.
@@ -88,10 +112,11 @@ pub fn agents(counts: &HashMap<AgentHarness, usize>, json: bool) {
             1 => "1 session".to_string(),
             many => format!("{many} sessions"),
         };
-        println!(
+        line(&format!(
             "{:<width$}  {detail}",
             harness.display_name(),
             width = width
-        );
+        ))?;
     }
+    Ok(())
 }

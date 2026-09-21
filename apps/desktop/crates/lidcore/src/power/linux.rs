@@ -54,19 +54,23 @@ impl LogindInhibitor {
     }
 
     fn take_lock(&mut self) -> Result<OwnedFd> {
-        let connection = Connection::system()
-            .map_err(|error| LidError::Bus(format!("system bus unavailable: {error}")))?;
+        let connection = Connection::system().map_err(|error| LidError::bus(error.to_string()))?;
 
         let manager = Login1ManagerProxyBlocking::new(&connection)
-            .map_err(|error| LidError::Bus(format!("logind unreachable: {error}")))?;
+            .map_err(|error| LidError::bus(format!("logind is not on the bus: {error}")))?;
 
         let fd = manager.inhibit(WHAT, WHO, WHY, MODE).map_err(|error| {
             // Denials here are almost always polkit refusing an inactive or
-            // remote session, which is worth saying plainly.
-            LidError::Denied(format!(
-                "logind refused a {WHAT} inhibitor ({error}). This usually means the \
-                 session is not an active local one."
-            ))
+            // remote session, so say so rather than echoing the D-Bus error.
+            LidError::denied(
+                format!("take a {WHAT} inhibitor from logind"),
+                error.to_string(),
+            )
+            .with_hint(
+                "logind grants lid inhibitors to active local sessions. Check \
+                 `loginctl show-session $XDG_SESSION_ID -p Active -p Remote`, and \
+                 note that SSH sessions cannot hold the lid open.",
+            )
         })?;
 
         Ok(OwnedFd::from(fd))

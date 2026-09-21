@@ -9,6 +9,11 @@
 //! surface) and `lid-gui` (the Windows tray app) are both thin shells over
 //! this crate, which keeps the UI choice reversible.
 //!
+//! Two modules are the entry points for anything configurable or fallible:
+//! [`config`] holds every tunable value and well-known path, and [`error`]
+//! holds every error, each carrying the attempted action and an actionable
+//! hint.
+//!
 //! macOS is deliberately not implemented here — it is served by the shipping
 //! Swift app in `apps/macos`. [`power::backend`] returns
 //! [`LidError::UnsupportedPlatform`] there so this crate still builds on a Mac
@@ -16,6 +21,7 @@
 
 pub mod agents;
 pub mod battery;
+pub mod config;
 pub mod duration;
 pub mod error;
 pub mod power;
@@ -25,19 +31,10 @@ pub mod store;
 
 pub use agents::{AgentHarness, RunningProcess, session_counts, sessions_now};
 pub use battery::{BatterySafetyPolicy, BatteryStatus};
+pub use config::{APP_ID, APP_NAME, VERSION};
 pub use duration::SessionDuration;
-pub use error::LidError;
+pub use error::{LidError, Result};
 pub use power::{LidPowerBackend, backend};
 pub use session::SleepSessionController;
 pub use state::SleepControlState;
 pub use store::SleepSessionStore;
-
-/// Reverse-DNS identifier, used for the single-instance lock, the config
-/// directory and the systemd user unit name.
-pub const APP_ID: &str = "com.krishkalaria.close-my-lid";
-
-/// Human-facing app name.
-pub const APP_NAME: &str = "Close My Lid";
-
-/// Kept in sync with the root `package.json` and the Swift `CommandLineInterface`.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");

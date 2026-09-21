@@ -138,7 +138,10 @@ fn active_scheme() -> Result<GUID> {
     check(status, "read the active power scheme")?;
 
     if scheme.is_null() {
-        return Err(LidError::Backend("the active power scheme was null".into()));
+        return Err(LidError::backend(
+            "read the active power scheme",
+            "Windows reported no active scheme",
+        ));
     }
 
     let value = unsafe { *scheme };
@@ -209,8 +212,9 @@ fn set_execution_state(state: EXECUTION_STATE) -> Result<()> {
     // Returns the previous state, or 0 on failure.
     let previous = unsafe { SetThreadExecutionState(state) };
     if previous == EXECUTION_STATE(0) {
-        return Err(LidError::Backend(
-            "SetThreadExecutionState was refused".into(),
+        return Err(LidError::backend(
+            "request that Windows stay awake",
+            "SetThreadExecutionState was refused",
         ));
     }
     Ok(())
@@ -225,13 +229,17 @@ fn check(status: WIN32_ERROR, what: &str) -> Result<()> {
     }
 
     let error = windows::core::Error::from_hresult(status.to_hresult());
+
     // ERROR_ACCESS_DENIED on a managed machine is the realistic failure here.
     if status == WIN32_ERROR(5) {
-        return Err(LidError::Denied(format!(
-            "Windows refused to {what}: {error}. The active power scheme may be \
-             managed by group policy."
-        )));
+        return Err(
+            LidError::denied(what.to_string(), error.to_string()).with_hint(
+                "The active power scheme may be managed by group policy. Check with \
+             `powercfg /getactivescheme`, or ask your administrator to allow \
+             changing the lid-close action.",
+            ),
+        );
     }
 
-    Err(LidError::Backend(format!("could not {what}: {error}")))
+    Err(LidError::backend(what.to_string(), error.to_string()))
 }

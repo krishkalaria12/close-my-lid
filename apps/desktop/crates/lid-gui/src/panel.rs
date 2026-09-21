@@ -11,6 +11,7 @@ use gpui::{
 };
 use lidcore::{AgentHarness, BatterySafetyPolicy, SessionDuration};
 
+use crate::config;
 use crate::state::AppState;
 use crate::theme;
 
@@ -37,7 +38,7 @@ impl Panel {
                 state.start(SessionDuration::Indefinite)
             };
             if let Err(error) = result {
-                tracing::error!(%error, "could not toggle the hold");
+                tracing::error!(%error, hint = error.hint(), "could not toggle the hold");
             }
             cx.notify();
         });
@@ -46,7 +47,7 @@ impl Panel {
     fn hold_for(&mut self, duration: SessionDuration, cx: &mut Context<Self>) {
         self.state.update(cx, |state, cx| {
             if let Err(error) = state.start(duration) {
-                tracing::error!(%error, "could not start the hold");
+                tracing::error!(%error, hint = error.hint(), "could not start the hold");
             }
             cx.notify();
         });
@@ -65,12 +66,15 @@ impl Render for Panel {
             .map(|harness| (*harness, state.agents.get(harness).copied().unwrap_or(0)))
             .collect();
         let working = agents.iter().filter(|(_, count)| *count > 0).count();
-        let startup_error = state.startup_error.clone();
+        let startup_error = state
+            .startup_error
+            .as_ref()
+            .map(|error| (error.headline(), error.hint().map(str::to_owned)));
 
         let mut root = div()
             .flex()
             .flex_col()
-            .w(px(theme::PANEL_WIDTH))
+            .w(px(config::PANEL_WIDTH))
             .bg(theme::surface())
             .text_color(theme::text_primary())
             .rounded(px(8.0))
@@ -127,23 +131,39 @@ impl Render for Panel {
         );
 
         // A backend that failed to initialise is the one thing worth shouting
-        // about, since nothing else in the panel will work.
-        if let Some(error) = startup_error {
-            root = root.child(
-                div()
-                    .px(px(16.0))
-                    .py(px(12.0))
-                    .text_size(px(12.0))
-                    .text_color(theme::danger())
-                    .child(error),
-            );
+        // about, since nothing else in the panel will work. The hint is shown
+        // under it because it is the only actionable part.
+        if let Some((headline, hint)) = startup_error {
+            let mut block = div()
+                .flex()
+                .flex_col()
+                .gap(px(4.0))
+                .px(px(16.0))
+                .py(px(12.0))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme::danger())
+                        .child(headline),
+                );
+
+            if let Some(hint) = hint {
+                block = block.child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(theme::text_secondary())
+                        .child(hint),
+                );
+            }
+
+            root = root.child(block);
         }
 
         root = root.child(rule());
 
         if let Some(battery) = battery {
             let low = self.battery_policy.should_release(battery);
-            let track = theme::PANEL_WIDTH - 32.0;
+            let track = config::PANEL_WIDTH - 32.0;
             let filled = (track * f32::from(battery.percentage) / 100.0).max(8.0);
 
             root = root.child(

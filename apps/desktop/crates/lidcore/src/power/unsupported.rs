@@ -11,15 +11,21 @@ pub struct UnsupportedBackend;
 
 impl LidPowerBackend for UnsupportedBackend {
     fn acquire(&mut self) -> Result<()> {
-        Err(LidError::UnsupportedPlatform(std::env::consts::OS))
+        Err(LidError::UnsupportedPlatform {
+            os: std::env::consts::OS,
+        })
     }
 
     fn release(&mut self) -> Result<()> {
-        Err(LidError::UnsupportedPlatform(std::env::consts::OS))
+        Err(LidError::UnsupportedPlatform {
+            os: std::env::consts::OS,
+        })
     }
 
     fn is_held(&self) -> Result<bool> {
-        Err(LidError::UnsupportedPlatform(std::env::consts::OS))
+        Err(LidError::UnsupportedPlatform {
+            os: std::env::consts::OS,
+        })
     }
 
     fn describe(&self) -> &'static str {

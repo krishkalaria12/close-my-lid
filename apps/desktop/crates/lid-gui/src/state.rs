@@ -13,8 +13,9 @@ use tracing::{error, warn};
 
 pub struct AppState {
     controller: Option<SleepSessionController>,
-    /// Why the backend could not be built, if it could not be.
-    pub startup_error: Option<String>,
+    /// Why the backend could not be built, if it could not be. Held as a typed
+    /// error so the panel can show its hint, not just a message.
+    pub startup_error: Option<GuiError>,
     pub battery: Option<BatteryStatus>,
     pub agents: HashMap<AgentHarness, usize>,
 }
@@ -29,9 +30,9 @@ impl AppState {
                 }
                 (Some(controller), None)
             }
-            Err(error) => {
-                error!(%error, "no lid backend available");
-                (None, Some(error.to_string()))
+            Err(source) => {
+                error!(%source, "no lid backend available");
+                (None, Some(GuiError::NoBackend { source }))
             }
         };
 

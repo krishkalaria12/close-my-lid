@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 lidcore.workspace = true
-anyhow.workspace = true
+thiserror.workspace = true
 clap.workspace = true
 chrono.workspace = true
 serde_json.workspace = true

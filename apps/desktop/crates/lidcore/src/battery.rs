@@ -7,6 +7,8 @@
 use starship_battery::{Manager, State};
 use tracing::debug;
 
+use crate::config;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BatteryStatus {
     /// 0–100.
@@ -22,8 +24,9 @@ pub struct BatterySafetyPolicy {
 
 impl Default for BatterySafetyPolicy {
     fn default() -> Self {
-        // Matches the macOS app.
-        Self { threshold: 5 }
+        Self {
+            threshold: config::BATTERY_RELEASE_THRESHOLD,
+        }
     }
 }
 

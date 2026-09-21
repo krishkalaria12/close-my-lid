@@ -42,6 +42,31 @@ the macOS watchdog LaunchAgent.
 UI choice reversible, and it is why the Linux CLI and the Windows GUI can
 share everything that matters.
 
+## Errors and configuration
+
+Every crate follows the same two-file convention:
+
+- **`error.rs`** holds every error that crate can produce. No `String` errors
+  and no ad-hoc `anyhow` at call sites. Each variant records the *action* that
+  was attempted alongside the platform's own wording, and carries an optional
+  hint with the actionable next step. Backends supply their own hints, so OS
+  knowledge stays with the OS code.
+- **`config.rs`** holds every tunable value and well-known path. Shared values
+  live in `lidcore::config` and are re-exported, so the CLI and the tray app
+  cannot drift apart on things like the supervision interval.
+
+The CLI turns this into distinct `sysexits.h` exit codes so scripts can branch
+without parsing text — `69` unsupported platform, `77` refused, `72` bad state
+file — and prints the cause chain and hint to stderr:
+
+```
+$ close-my-lid status
+close-my-lid: Close My Lid has no lid backend for macos
+
+hint: On macOS use the Close My Lid menu bar app in /Applications, which
+handles this natively.
+```
+
 ## Why the CLI leads on Linux
 
 Stock GNOME ships no system tray without the AppIndicator extension, and

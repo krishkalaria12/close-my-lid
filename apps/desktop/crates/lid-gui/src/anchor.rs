@@ -12,8 +12,7 @@
 
 use gpui::{App, Bounds, Pixels, Point, Size, px};
 
-/// Gap between the panel and the screen edge.
-const MARGIN: f32 = 12.0;
+use crate::config::{PANEL_MARGIN as MARGIN, TASKBAR_INSET};
 
 pub fn panel_bounds(size: Size<Pixels>, cx: &App) -> Bounds<Pixels> {
     if let Some(tray) = cx.tray_icon_bounds() {
@@ -42,7 +41,7 @@ pub fn panel_bounds(size: Size<Pixels>, cx: &App) -> Bounds<Pixels> {
     let screen = display.bounds();
     let origin = Point {
         x: screen.origin.x + screen.size.width - size.width - px(MARGIN),
-        y: screen.origin.y + screen.size.height - size.height - px(MARGIN * 4.0),
+        y: screen.origin.y + screen.size.height - size.height - px(TASKBAR_INSET),
     };
     clamp_to_display(Bounds { origin, size }, cx)
 }

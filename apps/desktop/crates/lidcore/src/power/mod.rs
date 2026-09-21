@@ -52,8 +52,8 @@ pub fn backend() -> Result<Box<dyn LidPowerBackend>> {
     }
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     {
-        Err(crate::error::LidError::UnsupportedPlatform(
-            std::env::consts::OS,
-        ))
+        Err(crate::error::LidError::UnsupportedPlatform {
+            os: std::env::consts::OS,
+        })
     }
 }

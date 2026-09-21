@@ -10,19 +10,21 @@
 //! inhibitor lives only as long as the file descriptor is open, so something
 //! must stay alive. Use the systemd user unit from `close-my-lid systemd` to
 //! run it in the background.
+//!
+//! Errors and exit codes are defined in [`error`]; tunables in [`config`].
 
+mod config;
+mod error;
 mod render;
 
+use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration as StdDuration;
 
-use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use lidcore::{APP_NAME, SessionDuration, SleepSessionController, VERSION};
 
-/// How often the supervision loop checks for expiry and low battery.
-const TICK: StdDuration = StdDuration::from_secs(15);
+use crate::error::{CliError, Result};
 
 #[derive(Parser)]
 #[command(
@@ -44,7 +46,11 @@ enum Command {
     /// Hold the lid open until the duration elapses or you press Ctrl-C.
     Enable {
         /// `30m`, `2h`, `90` (minutes) or `unlimited`.
-        #[arg(long = "for", default_value = "unlimited", value_parser = SessionDuration::parse)]
+        #[arg(
+            long = "for",
+            default_value = config::DEFAULT_DURATION,
+            value_parser = SessionDuration::parse,
+        )]
         duration: SessionDuration,
     },
     /// Release any hold this machine is under.
@@ -64,27 +70,36 @@ enum Command {
     Systemd,
 }
 
-fn main() -> Result<()> {
+fn main() -> ExitCode {
     let cli = Cli::parse();
     init_tracing(cli.verbose);
 
-    match cli.command {
-        Command::Enable { duration } => enable(duration),
-        Command::Disable => disable(),
-        Command::Status { json } => status(json),
-        Command::Agents { json } => {
-            render::agents(&lidcore::sessions_now(), json);
-            Ok(())
-        }
-        Command::Systemd => {
-            print!("{}", render::SYSTEMD_UNIT);
-            Ok(())
+    match run(cli.command) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            error.report();
+            error.exit_code()
         }
     }
 }
 
+fn run(command: Command) -> Result<()> {
+    match command {
+        Command::Enable { duration } => enable(duration),
+        Command::Disable => disable(),
+        Command::Status { json } => status(json),
+        Command::Agents { json } => render::agents(&lidcore::sessions_now(), json),
+        Command::Systemd => render::systemd_unit(),
+    }
+}
+
 fn init_tracing(verbose: bool) {
-    let level = if verbose { "debug" } else { "warn" };
+    let level = if verbose {
+        config::VERBOSE_LOG_LEVEL
+    } else {
+        config::DEFAULT_LOG_LEVEL
+    };
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| level.into()),
@@ -94,50 +109,38 @@ fn init_tracing(verbose: bool) {
         .init();
 }
 
-fn controller() -> Result<SleepSessionController> {
-    SleepSessionController::new().context("could not set up a lid backend for this system")
-}
-
 fn enable(duration: SessionDuration) -> Result<()> {
-    let mut controller = controller()?;
+    let mut controller = SleepSessionController::new()?;
     controller.reconcile_at_launch()?;
     controller.start(duration)?;
 
-    println!(
-        "{APP_NAME} is holding the lid open ({}).\nMechanism: {}.\nPress Ctrl-C to release.",
-        duration.label(),
-        controller.describe_backend()
-    );
+    render::hold_started(duration, controller.describe_backend())?;
 
     let running = Arc::new(AtomicBool::new(true));
     let flag = running.clone();
     ctrlc::set_handler(move || flag.store(false, Ordering::SeqCst))
-        .context("could not install a Ctrl-C handler")?;
+        .map_err(CliError::SignalHandler)?;
 
     // The hold lives as long as this loop does. On Linux that is literal: the
     // logind descriptor is owned by the controller and closes when we return.
     while running.load(Ordering::SeqCst) {
         if controller.tick()? {
-            println!("\nSession ended; normal sleep restored.");
-            return Ok(());
+            return render::hold_expired();
         }
-        std::thread::sleep(TICK);
+        std::thread::sleep(config::SUPERVISION_INTERVAL);
     }
 
     controller.stop()?;
-    println!("\nReleased. Normal sleep restored.");
-    Ok(())
+    render::hold_released()
 }
 
 fn disable() -> Result<()> {
-    let mut controller = controller()?;
+    let mut controller = SleepSessionController::new()?;
     controller.stop()?;
-    println!("{APP_NAME} restored normal sleep behaviour.");
-    Ok(())
+    render::line(&format!("{APP_NAME} restored normal sleep behaviour."))
 }
 
 fn status(json: bool) -> Result<()> {
-    let controller = controller()?;
-    render::status(&controller.state(), controller.describe_backend(), json);
-    Ok(())
+    let controller = SleepSessionController::new()?;
+    render::status(&controller.state(), controller.describe_backend(), json)
 }

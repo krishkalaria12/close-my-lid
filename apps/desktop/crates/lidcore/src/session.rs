@@ -24,7 +24,7 @@ pub struct SleepSessionController {
 impl SleepSessionController {
     /// Builds a controller for the current OS and adopts any saved state.
     pub fn new() -> Result<Self> {
-        Ok(Self::with_parts(backend()?, SleepSessionStore::new()))
+        Ok(Self::with_parts(backend()?, SleepSessionStore::new()?))
     }
 
     pub fn with_parts(power: Box<dyn LidPowerBackend>, store: SleepSessionStore) -> Self {
@@ -141,7 +141,7 @@ mod tests {
     impl LidPowerBackend for FakeBackend {
         fn acquire(&mut self) -> Result<()> {
             if self.fail_acquire {
-                return Err(LidError::Denied("refused".into()));
+                return Err(LidError::denied("start a test hold", "refused"));
             }
             self.held = true;
             Ok(())

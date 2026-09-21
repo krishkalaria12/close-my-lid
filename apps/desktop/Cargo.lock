@@ -3254,12 +3254,12 @@ dependencies = [
 name = "lid-cli"
 version = "0.4.4"
 dependencies = [
- "anyhow",
  "chrono",
  "clap 4.6.7",
  "ctrlc",
  "lidcore",
  "serde_json",
+ "thiserror 2.0.20",
  "tracing",
  "tracing-subscriber",
 ]
@@ -3269,9 +3269,9 @@ name = "lid-gui"
 version = "0.4.4"
 dependencies = [
  "adabraka-gpui",
- "anyhow",
  "chrono",
  "lidcore",
+ "thiserror 2.0.20",
  "tracing",
  "tracing-subscriber",
 ]

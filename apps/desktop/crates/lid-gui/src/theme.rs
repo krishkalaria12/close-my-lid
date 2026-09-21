@@ -4,10 +4,10 @@
 //! `NSVisualEffectView` vibrancy, SF Symbols and Command-key affordances, all
 //! of which read as foreign on Windows. The *structure* is shared; the skin is
 //! not. These values target a Windows 11 flyout.
+//!
+//! Geometry lives in `config.rs`; only appearance belongs here.
 
 use gpui::{Hsla, rgb, rgba};
-
-pub const PANEL_WIDTH: f32 = 320.0;
 
 /// Acrylic-ish base. GPUI paints this itself rather than asking the compositor
 /// for a backdrop, so it is a solid colour with a hint of transparency.

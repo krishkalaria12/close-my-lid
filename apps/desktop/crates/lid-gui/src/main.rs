@@ -15,11 +15,11 @@
 )]
 
 mod anchor;
+mod config;
+mod error;
 mod panel;
 mod state;
 mod theme;
-
-use std::time::Duration;
 
 use gpui::single_instance::{SingleInstance, send_activate_to_existing};
 use gpui::{
@@ -28,13 +28,9 @@ use gpui::{
 };
 use lidcore::{APP_ID, APP_NAME, SessionDuration};
 
+use crate::config::action;
 use crate::panel::Panel;
 use crate::state::AppState;
-
-/// How often expiry and the battery safety release are checked.
-const TICK: Duration = Duration::from_secs(15);
-
-const PANEL_HEIGHT: f32 = 460.0;
 
 fn main() {
     tracing_subscriber::fmt()
@@ -82,25 +78,25 @@ fn setup_tray(cx: &mut App) {
     let mut items = vec![
         TrayMenuItem::Action {
             label: "Open Panel".into(),
-            id: "panel".into(),
+            id: action::PANEL.into(),
         },
         TrayMenuItem::Separator,
     ];
     for duration in SessionDuration::PRESETS {
         items.push(TrayMenuItem::Action {
             label: format!("Hold for {}", duration.label()).into(),
-            id: format!("hold:{}", duration.label()).into(),
+            id: format!("{}{}", action::HOLD_PREFIX, duration.label()).into(),
         });
     }
     items.push(TrayMenuItem::Separator);
     items.push(TrayMenuItem::Action {
         label: "Stop Holding".into(),
-        id: "stop".into(),
+        id: action::STOP.into(),
     });
     items.push(TrayMenuItem::Separator);
     items.push(TrayMenuItem::Action {
         label: "Quit".into(),
-        id: "quit".into(),
+        id: action::QUIT.into(),
     });
 
     cx.set_tray_menu(items);
@@ -115,16 +111,16 @@ fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
     });
 
     cx.on_tray_menu_action(move |id, cx| match id.as_ref() {
-        "panel" => open_panel(state.clone(), cx),
-        "stop" => {
+        action::PANEL => open_panel(state.clone(), cx),
+        action::STOP => {
             state.update(cx, |state, cx| {
                 if let Err(error) = state.stop() {
-                    tracing::error!(%error, "could not stop the hold");
+                    tracing::error!(%error, hint = error.hint(), "could not stop the hold");
                 }
                 cx.notify();
             });
         }
-        "quit" => {
+        action::QUIT => {
             // Release before exiting; on Windows the power-scheme edit would
             // otherwise outlive the process.
             state.update(cx, |state, _| {
@@ -133,7 +129,7 @@ fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
             cx.quit();
         }
         other => {
-            let Some(label) = other.strip_prefix("hold:") else {
+            let Some(label) = other.strip_prefix(action::HOLD_PREFIX) else {
                 return;
             };
             let Some(duration) = SessionDuration::PRESETS
@@ -144,7 +140,7 @@ fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
             };
             state.update(cx, |state, cx| {
                 if let Err(error) = state.start(duration) {
-                    tracing::error!(%error, "could not start the hold");
+                    tracing::error!(%error, hint = error.hint(), "could not start the hold");
                 }
                 cx.notify();
             });
@@ -161,7 +157,7 @@ fn open_panel(state: gpui::Entity<AppState>, cx: &mut App) {
     });
 
     let bounds: Bounds<_> =
-        anchor::panel_bounds(size(px(theme::PANEL_WIDTH), px(PANEL_HEIGHT)), cx);
+        anchor::panel_bounds(size(px(config::PANEL_WIDTH), px(config::PANEL_HEIGHT)), cx);
 
     let options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -177,6 +173,9 @@ fn open_panel(state: gpui::Entity<AppState>, cx: &mut App) {
     if let Err(error) = cx.open_window(options, |_window: &mut Window, cx| {
         cx.new(|cx| Panel::new(state.clone(), cx))
     }) {
+        let error = crate::error::GuiError::Window {
+            detail: error.to_string(),
+        };
         tracing::error!(%error, "could not open the panel");
     }
 }
@@ -186,7 +185,9 @@ fn open_panel(state: gpui::Entity<AppState>, cx: &mut App) {
 fn start_supervisor(state: gpui::Entity<AppState>, cx: &mut App) {
     cx.spawn(async move |cx| {
         loop {
-            cx.background_executor().timer(TICK).await;
+            cx.background_executor()
+                .timer(config::SUPERVISION_INTERVAL)
+                .await;
 
             let released = state.update(cx, |state, cx| {
                 let released = state.tick();
