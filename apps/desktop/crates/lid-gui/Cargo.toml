@@ -1,0 +1,27 @@
+[package]
+name = "lid-gui"
+description = "Close My Lid tray app for Windows, built on adabraka-gpui."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "close-my-lid-gui"
+path = "src/main.rs"
+
+[dependencies]
+lidcore.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Pinned exactly on purpose: gpui is pre-1.0 and breaks between minor
+# versions. Upgrade deliberately, never by a floating range.
+#
+# Ships on Windows. Also builds on macOS, which is useful for iterating on the
+# panel from a Mac — the macOS *product* remains the Swift app in apps/macos.
+[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
+adabraka-gpui.workspace = true
