@@ -44,11 +44,11 @@ impl AgentHarness {
     pub fn display_name(&self) -> &'static str {
         match self {
             Self::ClaudeCode => "Claude Code",
-            Self::Codex => "OpenAI Codex CLI",
+            Self::Codex => "OpenAI Codex",
             Self::OpenCode => "OpenCode",
             Self::Antigravity => "Antigravity",
-            Self::Copilot => "GitHub Copilot CLI",
-            Self::Cursor => "Cursor CLI",
+            Self::Copilot => "GitHub Copilot",
+            Self::Cursor => "Cursor",
             Self::Pi => "Pi",
         }
     }
