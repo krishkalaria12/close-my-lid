@@ -10,7 +10,7 @@ use std::rc::Rc;
 use lidcore::power::macos::PmsetLidGuard;
 use lidcore::{LidError, VERSION, launchd, sudoers};
 use objc2::rc::Retained;
-use objc2::{MainThreadOnly, msg_send};
+use objc2::{ClassType, MainThreadOnly, Message, msg_send};
 use objc2_app_kit::{
     NSApplication, NSBackingStoreType, NSBezelStyle, NSButton, NSColor, NSControlStateValue,
     NSTextField, NSView, NSWindow, NSWindowStyleMask,
@@ -31,10 +31,14 @@ const LINE: f64 = 18.0;
 
 pub struct SettingsWindow {
     window: Retained<NSWindow>,
+    content: Retained<NSView>,
     launch_toggle: Retained<NSButton>,
     grant_status: Retained<NSTextField>,
     grant_button: Retained<NSButton>,
     error: Retained<NSTextField>,
+    /// The rows, in the order they are stacked, so the window can be laid out
+    /// again whenever a row's text changes the height it needs.
+    rows: Vec<Retained<NSView>>,
     /// Owned, never read: AppKit keeps a control's `target` without retaining
     /// it, so dropping these would leave the buttons pointing at freed memory.
     #[allow(dead_code)]
@@ -95,18 +99,20 @@ impl SettingsWindow {
         );
         content.addSubview(&version);
 
-        let height = place(
-            &[
-                &launch_toggle,
-                &grant_heading,
-                &grant_status,
-                &grant_button,
-                &battery_button,
-                &error,
-                &version,
-            ],
-            &content,
-        );
+        let rows: Vec<Retained<NSView>> = [
+            launch_toggle.as_super().as_super(),
+            &*grant_heading as &NSView,
+            &*grant_status as &NSView,
+            grant_button.as_super().as_super(),
+            battery_button.as_super().as_super(),
+            &*error as &NSView,
+            &*version as &NSView,
+        ]
+        .into_iter()
+        .map(|row| row.retain())
+        .collect();
+
+        let height = place(&rows, &content);
 
         let window: Retained<NSWindow> = unsafe {
             msg_send![
@@ -127,10 +133,12 @@ impl SettingsWindow {
         let _ = app;
         let settings = Self {
             window,
+            content,
             launch_toggle,
             grant_status,
             grant_button,
             error,
+            rows,
             targets,
         };
         settings.refresh();
@@ -166,6 +174,8 @@ impl SettingsWindow {
         } else {
             "Grant Once…"
         }));
+
+        self.relayout();
     }
 
     pub fn report(&self, error: Option<&LidError>) {
@@ -176,6 +186,31 @@ impl SettingsWindow {
             }
             None => self.error.setHidden(true),
         }
+        self.relayout();
+    }
+
+    /// Re-stacks the rows and resizes the window to whatever they now need.
+    ///
+    /// The explanatory text and the error line wrap, so the height a row needs
+    /// depends on the words in it. Measuring once at construction — when both
+    /// were still empty — sized them for a single line and clipped the second,
+    /// which is where the sentence explaining the administrator grant was
+    /// losing its second half.
+    fn relayout(&self) {
+        // The content view's own height, not the window's: the window frame
+        // includes the title bar, so comparing the two would never match and
+        // the resize below would run on every refresh.
+        let previous = self.content.frame().size.height;
+        let height = place(&self.rows, &self.content);
+        // Half a point: layout arithmetic does not land on exact equality, and
+        // nothing smaller than this is a visible change.
+        if (previous - height).abs() < 0.5 {
+            return;
+        }
+        // `setContentSize:` keeps the title bar out of the arithmetic and
+        // grows the window downwards from its current top-left, so a window
+        // already on screen does not appear to jump.
+        self.window.setContentSize(NSSize::new(WIDTH, height));
     }
 }
 
@@ -226,10 +261,16 @@ fn message_for(error: &LidError) -> String {
 }
 
 /// Stacks the rows top-down and returns the window's content height.
-fn place(rows: &[&NSView], content: &NSView) -> f64 {
+///
+/// Each row is measured at the width it will be given, so a wrapping label
+/// reports the height of every line it actually needs rather than of one.
+fn place(rows: &[Retained<NSView>], content: &NSView) -> f64 {
     let heights: Vec<f64> = rows
         .iter()
         .map(|row| {
+            // A hidden row still occupies its slot: the error line appears and
+            // disappears, and a window that resized under the pointer every
+            // time would be worse than one gap of dead space.
             let natural = row.fittingSize().height;
             if natural > 0.0 { natural } else { LINE }
         })
