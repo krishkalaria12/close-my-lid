@@ -1,0 +1,22 @@
+[package]
+name = "lid-cli"
+description = "close-my-lid command line interface for Linux and Windows."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "close-my-lid"
+path = "src/main.rs"
+
+[dependencies]
+lidcore.workspace = true
+thiserror.workspace = true
+clap.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+ctrlc.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
