@@ -259,10 +259,9 @@ impl Controller {
         };
         match self.session.state() {
             SleepControlState::Active { ends_at, .. } => {
-                let beat = HoldHeartbeat {
-                    ends_at,
-                    updated_at: heartbeat::now_utc(),
-                };
+                // Supervised: this app is alive and refreshes the record on
+                // every pass, so the watchdog may judge it by liveness.
+                let beat = HoldHeartbeat::supervised(ends_at, heartbeat::now_utc());
                 if let Err(error) = store.write(&beat) {
                     warn!(%error, "could not write the hold heartbeat");
                 }

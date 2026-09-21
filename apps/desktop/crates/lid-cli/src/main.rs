@@ -247,8 +247,16 @@ fn watchdog_pass() -> Result<()> {
     Ok(())
 }
 
-/// Refreshes the liveness record the `--watchdog` pass reads. Best-effort: a
-/// hold that cannot record its heartbeat is still a hold.
+/// Records the hold for the `--watchdog` pass to supervise.
+///
+/// Written as *unsupervised*: this command applies the persistent `pmset`
+/// setting and exits, so nothing will ever refresh the record. Marking it
+/// otherwise would make the watchdog read a hold three minutes old as a hold
+/// whose owner had crashed, and release it — however long the user asked for.
+/// The deadline still applies, so a `--for 30m` hold is cleaned up at 30
+/// minutes whether or not the menu bar app ever ran.
+///
+/// Best-effort: a hold that cannot record its heartbeat is still a hold.
 #[cfg(target_os = "macos")]
 fn write_heartbeat(controller: &SleepSessionController) {
     use lidcore::{HoldHeartbeat, HoldHeartbeatStore, heartbeat};
@@ -256,10 +264,7 @@ fn write_heartbeat(controller: &SleepSessionController) {
     let Ok(store) = HoldHeartbeatStore::new() else {
         return;
     };
-    let heartbeat = HoldHeartbeat {
-        ends_at: controller.state().ends_at(),
-        updated_at: heartbeat::now_utc(),
-    };
+    let heartbeat = HoldHeartbeat::unsupervised(controller.state().ends_at(), heartbeat::now_utc());
     if let Err(error) = store.write(&heartbeat) {
         tracing::warn!(%error, "could not write the hold heartbeat");
     }

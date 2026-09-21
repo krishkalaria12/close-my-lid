@@ -29,6 +29,18 @@ impl SleepControlState {
         }
     }
 
+    /// When the running session began, or `None` if none is running.
+    ///
+    /// Needed by anything that has to line up with the session's own clock —
+    /// notably the notification plan, whose fire dates must match the end the
+    /// session actually recorded rather than the moment the request was made.
+    pub fn started_at(&self) -> Option<DateTime<Utc>> {
+        match self {
+            Self::Active { started_at, .. } => Some(*started_at),
+            Self::Inactive => None,
+        }
+    }
+
     /// True once a timed session has reached its end. Unlimited sessions never
     /// expire.
     pub fn has_expired(&self, now: DateTime<Utc>) -> bool {

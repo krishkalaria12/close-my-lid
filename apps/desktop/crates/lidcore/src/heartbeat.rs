@@ -7,6 +7,11 @@
 //! hold is active; the watchdog LaunchAgent invokes the same binary with
 //! `--watchdog` every minute, which performs one [`run_once`] pass.
 //!
+//! Not every hold has a process behind it. `close-my-lid enable` applies the
+//! persistent `pmset` setting and exits, so nothing refreshes its record —
+//! which is why a heartbeat says whether it is [`HoldHeartbeat::supervised`]
+//! and the liveness check applies only to the ones that are.
+//!
 //! That pass must never prompt, so it uses the passwordless-only executor: when
 //! the sudoers grant is missing, releasing fails and the heartbeat is left for
 //! the next tick instead of spawning an administrator dialog from a background
@@ -24,15 +29,53 @@ use crate::config;
 use crate::error::{LidError, Result};
 use crate::power::LidPowerBackend;
 
-/// A liveness record written by the app while a closed-lid hold is active.
+/// A liveness record written while a closed-lid hold is active.
 ///
 /// The watchdog compares this file against wall-clock time to detect a stranded
-/// `pmset disablesleep 1` after a crash or force-quit. `updated_at` is
-/// refreshed by the running app; `ends_at` is the session's scheduled end.
+/// `pmset disablesleep 1` after a crash or force-quit. `ends_at` is the
+/// session's scheduled end; `updated_at` is refreshed by the running app.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HoldHeartbeat {
     pub ends_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
+    /// Whether a live process is refreshing `updated_at`.
+    ///
+    /// The menu bar app is; `close-my-lid enable` is not — on macOS the hold
+    /// is a persistent `pmset` setting, so that command applies it and exits.
+    /// Judging an unsupervised hold by liveness would release it three
+    /// minutes after it was taken, whatever duration the user asked for, so
+    /// only the deadline applies to one.
+    ///
+    /// Defaults to `true` so a heartbeat written by an older build — which
+    /// only the app ever wrote — keeps its original meaning.
+    #[serde(default = "supervised_by_default")]
+    pub supervised: bool,
+}
+
+const fn supervised_by_default() -> bool {
+    true
+}
+
+impl HoldHeartbeat {
+    /// For a hold owned by a process that stays alive and keeps refreshing
+    /// this record — the menu bar app.
+    pub fn supervised(ends_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Self {
+        Self {
+            ends_at,
+            updated_at: now,
+            supervised: true,
+        }
+    }
+
+    /// For a hold applied by a process that then exits, leaving the persistent
+    /// `pmset` setting behind — `close-my-lid enable`.
+    pub fn unsupervised(ends_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Self {
+        Self {
+            ends_at,
+            updated_at: now,
+            supervised: false,
+        }
+    }
 }
 
 /// Reads and writes the heartbeat file shared between the app and the watchdog
@@ -58,14 +101,11 @@ impl HoldHeartbeatStore {
     }
 
     pub fn write(&self, heartbeat: &HoldHeartbeat) -> Result<()> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|error| LidError::io("create", parent, error))?;
-        }
         let encoded = serde_json::to_string(heartbeat).map_err(|source| LidError::Encode {
             path: self.path.clone(),
             source,
         })?;
-        fs::write(&self.path, encoded).map_err(|error| LidError::io("write", &self.path, error))
+        crate::atomic::write(&self.path, &encoded)
     }
 
     pub fn load(&self) -> Option<HoldHeartbeat> {
@@ -82,9 +122,11 @@ impl HoldHeartbeatStore {
 ///
 /// Two failure modes are covered:
 /// - **Dead app:** the heartbeat stopped refreshing (crash, force quit, power
-///   loss), so the app cannot clean up after itself.
-/// - **Missed expiry:** a timed hold ran past its end plus grace without the
-///   app releasing it.
+///   loss), so the app cannot clean up after itself. Checked only for a
+///   [`HoldHeartbeat::supervised`] record — nothing refreshes an unsupervised
+///   one by design.
+/// - **Missed expiry:** a timed hold ran past its end plus grace without
+///   anything releasing it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WatchdogPolicy {
     /// A heartbeat older than this means the owning app is gone. The app
@@ -110,11 +152,12 @@ impl WatchdogPolicy {
             return false;
         };
 
-        let app_is_gone = now
-            .signed_duration_since(heartbeat.updated_at)
-            .to_std()
-            .unwrap_or(Duration::ZERO)
-            > self.liveness_interval;
+        let app_is_gone = heartbeat.supervised
+            && now
+                .signed_duration_since(heartbeat.updated_at)
+                .to_std()
+                .unwrap_or(Duration::ZERO)
+                > self.liveness_interval;
         let hold_expired = match heartbeat.ends_at {
             Some(ends_at) => {
                 now.signed_duration_since(ends_at)
@@ -173,10 +216,10 @@ mod tests {
         let now = Utc::now();
         let store = HoldHeartbeatStore::at(std::env::temp_dir().join(store_name));
         store.remove();
-        let heartbeat = HoldHeartbeat {
-            ends_at: ends_in_minutes.map(|minutes| now + TimeDelta::minutes(minutes)),
-            updated_at: now - TimeDelta::seconds(updated_seconds_ago),
-        };
+        let heartbeat = HoldHeartbeat::supervised(
+            ends_in_minutes.map(|minutes| now + TimeDelta::minutes(minutes)),
+            now - TimeDelta::seconds(updated_seconds_ago),
+        );
         (store, heartbeat)
     }
 
@@ -221,6 +264,42 @@ mod tests {
         let now = Utc::now();
         let (_, heartbeat) = make_heartbeat("cml-hb-unlimited.json", None, 30);
         assert!(!policy.should_release(Some(heartbeat), now));
+    }
+
+    #[test]
+    fn an_unsupervised_hold_is_judged_only_by_its_deadline() {
+        let policy = WatchdogPolicy::default();
+        let now = Utc::now();
+
+        // `close-my-lid enable --for 4h` writes one record and exits. Nothing
+        // refreshes it, so liveness must not apply or the hold would be
+        // released three minutes in.
+        let stale = HoldHeartbeat::unsupervised(
+            Some(now + TimeDelta::hours(4)),
+            now - TimeDelta::minutes(30),
+        );
+        assert!(!policy.should_release(Some(stale), now));
+
+        // The deadline still does apply.
+        let expired = HoldHeartbeat::unsupervised(
+            Some(now - TimeDelta::minutes(3)),
+            now - TimeDelta::minutes(30),
+        );
+        assert!(policy.should_release(Some(expired), now));
+
+        // An unlimited unsupervised hold is left alone until `disable`.
+        let unlimited = HoldHeartbeat::unsupervised(None, now - TimeDelta::hours(9));
+        assert!(!policy.should_release(Some(unlimited), now));
+    }
+
+    #[test]
+    fn a_record_from_an_older_build_is_treated_as_supervised() {
+        // Older builds wrote no `supervised` field, and only the app wrote
+        // them — so the liveness half must still apply to those.
+        let raw = r#"{"ends_at":null,"updated_at":"2020-01-01T00:00:00Z"}"#;
+        let heartbeat: HoldHeartbeat = serde_json::from_str(raw).unwrap();
+        assert!(heartbeat.supervised);
+        assert!(WatchdogPolicy::default().should_release(Some(heartbeat), Utc::now()));
     }
 
     #[test]

@@ -94,15 +94,22 @@ fn report(result: lidcore::Result<()>) -> ExitCode {
 /// alive to hold it. A running menu bar app adopts the session on its next
 /// reconciliation pass.
 fn enable() -> lidcore::Result<()> {
+    // A hold another live process already owns must not be taken a second
+    // time; the CLI in `lid-cli` makes the same check.
+    lidcore::HoldLock::check_available()?;
+
     let mut controller = SleepSessionController::new()?;
     controller.reconcile_at_launch()?;
     controller.start(SessionDuration::Indefinite)?;
 
     if let Ok(store) = HoldHeartbeatStore::new() {
-        let _ = store.write(&HoldHeartbeat {
-            ends_at: controller.state().ends_at(),
-            updated_at: heartbeat::now_utc(),
-        });
+        // Unsupervised: this process is about to exit and nothing will refresh
+        // the record. The watchdog must judge the hold by its deadline alone,
+        // or it would release it three minutes from now.
+        let _ = store.write(&HoldHeartbeat::unsupervised(
+            controller.state().ends_at(),
+            heartbeat::now_utc(),
+        ));
     }
 
     println!("{APP_NAME} is holding closed-lid sleep.");
@@ -146,17 +153,30 @@ fn watchdog_pass() -> lidcore::Result<()> {
 }
 
 fn help() -> String {
+    // Named after however this copy was invoked. Inside the bundle the
+    // executable is `CloseMyLid`; a Homebrew install of the formula puts a
+    // `close-my-lid` symlink on the PATH. Printing whichever one the reader
+    // typed keeps the usage lines copy-pasteable.
+    let command = std::env::args()
+        .next()
+        .and_then(|path| {
+            std::path::Path::new(&path)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| "close-my-lid".to_string());
+
     format!(
         "\
 {APP_NAME} {VERSION}
 
 Usage:
-  close-my-lid              Launch the menu bar app
-  close-my-lid enable       Hold closed-lid sleep
-  close-my-lid disable      Restore normal closed-lid sleep
-  close-my-lid status       Print the current closed-lid sleep hold status
-  close-my-lid --version    Print the version
-  close-my-lid --help       Show this help"
+  {command}              Launch the menu bar app
+  {command} enable       Hold closed-lid sleep
+  {command} disable      Restore normal closed-lid sleep
+  {command} status       Print the current closed-lid sleep hold status
+  {command} --version    Print the version
+  {command} --help       Show this help"
     )
 }
 

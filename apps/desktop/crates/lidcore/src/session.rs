@@ -156,10 +156,7 @@ impl SleepSessionController {
         match (self.state.is_active(), held) {
             (false, true) => {
                 self.external_disable_observations = 0;
-                self.state = SleepControlState::Active {
-                    started_at: now,
-                    ends_at: None,
-                };
+                self.state = self.adopt_external_hold(now);
                 self.store.save(&self.state)?;
             }
             (true, false) => {
@@ -176,10 +173,35 @@ impl SleepSessionController {
         Ok(())
     }
 
+    /// The session to adopt when the OS reports a hold this controller did not
+    /// take.
+    ///
+    /// The state file is checked first, because on macOS another process can
+    /// legitimately own the hold: `close-my-lid enable --for 30m` applies the
+    /// persistent `pmset` setting, records its deadline and exits. Inventing
+    /// an indefinite session here would overwrite that deadline and quietly
+    /// turn a timed hold into one that never ends. Anything else — a hold
+    /// taken with `pmset` by hand, say — really is indefinite.
+    fn adopt_external_hold(&self, now: DateTime<Utc>) -> SleepControlState {
+        let stored = self.store.load();
+        if stored.is_active() && !stored.has_expired(now) {
+            debug!("adopting the session another process recorded");
+            return stored;
+        }
+        SleepControlState::Active {
+            started_at: now,
+            ends_at: None,
+        }
+    }
+
     /// Reasserts a saved hold after macOS wakes. Power settings can be reset
     /// during a sleep/wake cycle even though the user's session is still
     /// active. Carried over from the Swift app's `restoreAfterWake`.
     pub fn restore_after_wake(&mut self, held: bool, now: DateTime<Utc>) -> Result<()> {
+        // A disagreement seen before the machine slept says nothing about the
+        // setting it came back with; start the two-strike count over.
+        self.external_disable_observations = 0;
+
         if !self.state.is_active() {
             return Ok(());
         }
@@ -276,6 +298,7 @@ impl SleepSessionController {
 mod tests {
     use super::*;
     use crate::error::LidError;
+    use chrono::Duration;
 
     /// Records calls so the state machine can be tested without an OS.
     #[derive(Default)]
@@ -361,7 +384,6 @@ mod tests {
 
     #[test]
     fn stop_if_expired_releases_only_elapsed_sessions() {
-        use chrono::Duration;
         let mut controller = controller("cml-test-expiry.json");
         controller.start(SessionDuration::ONE_HOUR).unwrap();
         assert!(!controller.stop_if_expired(Utc::now()).unwrap());
@@ -381,6 +403,73 @@ mod tests {
         controller.sync_with_system(true, Utc::now()).unwrap();
         assert!(controller.state().is_active());
         assert_eq!(controller.state().ends_at(), None);
+    }
+
+    #[test]
+    fn adopting_a_hold_another_process_took_keeps_its_deadline() {
+        // `close-my-lid enable --for 30m` applies the persistent macOS setting,
+        // records its deadline and exits. A running app must adopt that
+        // session rather than overwrite it with an indefinite one.
+        let path = std::env::temp_dir().join("cml-test-adopt-timed.json");
+        let now = Utc::now();
+        let ends_at = now + Duration::minutes(30);
+        SleepSessionStore::at(&path)
+            .save(&SleepControlState::Active {
+                started_at: now,
+                ends_at: Some(ends_at),
+            })
+            .unwrap();
+
+        let mut controller = SleepSessionController::with_parts(
+            Box::new(FakeBackend::default()),
+            SleepSessionStore::at(&path),
+        );
+        // The app started before that hold existed, so its own state is stale.
+        controller.state = SleepControlState::Inactive;
+
+        controller.sync_with_system(true, now).unwrap();
+        assert_eq!(controller.state().ends_at(), Some(ends_at));
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn an_expired_stored_session_is_not_adopted() {
+        let path = std::env::temp_dir().join("cml-test-adopt-expired.json");
+        let now = Utc::now();
+        SleepSessionStore::at(&path)
+            .save(&SleepControlState::Active {
+                started_at: now - Duration::hours(2),
+                ends_at: Some(now - Duration::hours(1)),
+            })
+            .unwrap();
+
+        let mut controller = SleepSessionController::with_parts(
+            Box::new(FakeBackend::default()),
+            SleepSessionStore::at(&path),
+        );
+        controller.state = SleepControlState::Inactive;
+
+        controller.sync_with_system(true, now).unwrap();
+        assert_eq!(
+            controller.state().ends_at(),
+            None,
+            "a finished session is not a deadline"
+        );
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn a_wake_clears_a_strike_from_before_the_sleep() {
+        let now = Utc::now();
+        let mut controller = controller("cml-test-wake-strike.json");
+        controller.start(SessionDuration::ONE_HOUR).unwrap();
+
+        // One disagreement, then a sleep/wake cycle, then another. The pair
+        // must not add up: they are readings of two different power states.
+        controller.sync_with_system(false, now).unwrap();
+        controller.restore_after_wake(true, now).unwrap();
+        controller.sync_with_system(false, now).unwrap();
+        assert!(controller.state().is_active());
     }
 
     #[test]
@@ -431,7 +520,6 @@ mod tests {
 
     #[test]
     fn restore_after_wake_ends_an_expired_session() {
-        use chrono::Duration;
         let mut controller = controller("cml-test-wake-expired.json");
         controller.start(SessionDuration::ONE_HOUR).unwrap();
 
