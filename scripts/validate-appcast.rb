@@ -12,6 +12,11 @@
 # historical items but no longer required: nothing verifies it, because nothing
 # is fetched and executed from this feed any more. Gatekeeper checks the
 # signature and notarization of the archive the user actually downloads.
+#
+# The URL rule below is enforced a second time at runtime, by
+# `lidcore::updates::is_release_url`: the app refuses to open an enclosure that
+# is not under the project's own releases. This check is what stops a bad URL
+# being committed; that one is what stops a tampered feed reaching a browser.
 
 require "rexml/document"
 require "uri"

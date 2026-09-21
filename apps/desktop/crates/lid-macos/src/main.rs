@@ -33,6 +33,7 @@ mod notifications;
 mod panel;
 mod settings;
 mod ui;
+mod updates;
 
 use std::process::ExitCode;
 

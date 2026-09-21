@@ -250,7 +250,7 @@ impl App {
         match known {
             Some(url) => {
                 self.close_panel();
-                open_url(&url);
+                open_release_url(&url);
             }
             None => self.check_for_updates(),
         }
@@ -377,22 +377,22 @@ impl App {
 
     // MARK: updates
 
-    /// Checks the release feed off the main thread and records the answer.
+    /// Checks the release feed and records the answer.
+    ///
+    /// `NSURLSession` is already asynchronous, so this needs no worker of its
+    /// own; only the answer comes back to the main queue.
     fn check_for_updates(self: &Rc<Self>) {
-        std::thread::spawn(|| {
-            let found = match lidcore::updates::check_for_updates() {
-                Ok(found) => found,
-                Err(error) => {
-                    // Deliberately quiet: a laptop with no network is the
-                    // normal case for an app that runs all day.
-                    debug!(%error, "update check failed");
-                    return;
-                }
-            };
+        crate::updates::check(|found| {
             on_main(move || {
                 with_app(|app| {
-                    if let Some(update) = &found {
-                        debug!(version = %update.version, current = VERSION, "update available");
+                    match &found {
+                        Some(update) => {
+                            debug!(version = %update.version, current = VERSION, "update available");
+                        }
+                        // Logged too: "nothing happened" and "the check never
+                        // finished" look identical otherwise, and this is the
+                        // one path that talks to the network.
+                        None => debug!(current = VERSION, "no newer release on the feed"),
                     }
                     app.controller
                         .borrow_mut()
@@ -487,4 +487,21 @@ pub fn open_url(url: &str) {
         return;
     };
     NSWorkspace::sharedWorkspace().openURL(&url);
+}
+
+/// Opens a release page, and only a release page.
+///
+/// The URL came off a network feed that nothing signs any more, and this is
+/// the point where it would reach the user's browser. `lidcore` already
+/// refuses to record anything else, so a rejection here means the two checks
+/// have drifted apart — which is worth a log line rather than a silent pass.
+fn open_release_url(url: &str) {
+    if !lidcore::updates::is_release_url(url) {
+        warn!(
+            url,
+            "refusing to open an update URL outside the project releases"
+        );
+        return;
+    }
+    open_url(url);
 }
