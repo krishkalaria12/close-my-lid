@@ -42,3 +42,11 @@ pub const BATTERY_SETTINGS_URL: &str =
 pub const STATUS_ITEM_SYMBOL: &str = "laptopcomputer";
 
 pub const DEFAULT_LOG_LEVEL: &str = "warn";
+
+/// Unified-log subsystem used when the process has no bundle identifier —
+/// every `cargo run`. A bundled app uses its own identifier instead, so the
+/// two can never drift apart.
+pub const FALLBACK_LOG_SUBSYSTEM: &str = "app.closemylid.CloseMyLid";
+
+/// Unified-log category. One is enough: this is a menu bar app, not a service.
+pub const LOG_CATEGORY: &str = "app";
