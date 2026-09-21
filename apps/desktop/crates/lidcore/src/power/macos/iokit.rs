@@ -67,29 +67,42 @@ fn as_bool(value: &CFType) -> Option<bool> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn the_setting_is_readable_on_this_machine() {
-        // Every Mac reports this setting; a `None` here means the IOKit path
-        // is broken and every reconciliation would be forking `pmset` instead.
-        let held = sleep_disabled();
-        assert!(
-            held.is_some(),
-            "IOPMCopySystemPowerSettings should carry {SLEEP_DISABLED}"
-        );
-    }
-
-    #[test]
-    fn it_agrees_with_pmset() {
-        let Some(held) = sleep_disabled() else {
-            return;
-        };
+    /// Whether `pmset -g` reports the hold, which is the answer this module
+    /// exists to produce without forking.
+    fn pmset_reports_the_hold() -> bool {
         let output = std::process::Command::new("/usr/bin/pmset")
             .arg("-g")
             .output()
             .expect("pmset runs on macOS");
-        let printed =
-            super::super::disable_sleep_is_enabled(&String::from_utf8_lossy(&output.stdout));
-        assert_eq!(held, printed, "IOKit and pmset must report the same hold");
+        super::super::disable_sleep_is_enabled(&String::from_utf8_lossy(&output.stdout))
+    }
+
+    #[test]
+    fn it_either_agrees_with_pmset_or_declines_to_answer() {
+        // The contract, and the whole reason `is_held` keeps a `pmset`
+        // fallback: IOKit either gives the same answer the command gives, or
+        // gives none at all. A virtualised Mac — every CI runner — is the case
+        // where `IOPMCopySystemPowerSettings` omits the key entirely, and
+        // reading that as "not held" would strand a live hold.
+        if let Some(held) = sleep_disabled() {
+            assert_eq!(
+                held,
+                pmset_reports_the_hold(),
+                "IOKit and pmset disagree about the hold"
+            );
+        }
+    }
+
+    #[test]
+    fn the_backend_answers_whatever_iokit_says() {
+        use crate::power::LidPowerBackend;
+
+        // Whichever path `is_held` takes — IOKit or the `pmset` fallback — it
+        // must still produce the same answer as the command.
+        let held = super::super::PmsetLidGuard::new()
+            .is_held()
+            .expect("reading the closed-lid setting must work on macOS");
+        assert_eq!(held, pmset_reports_the_hold());
     }
 
     #[test]
