@@ -134,7 +134,7 @@ fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
             // Release builds hide the console, so refusals must surface as a
             // notification — otherwise the click silently does nothing.
             if let Some(headline) = headline {
-                let _ = cx.show_notification(APP_NAME, headline);
+                let _ = cx.show_notification(APP_NAME, &headline);
             }
         }
         action::QUIT => {
@@ -165,7 +165,7 @@ fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
                 None
             });
             if let Some(headline) = headline {
-                let _ = cx.show_notification(APP_NAME, headline);
+                let _ = cx.show_notification(APP_NAME, &headline);
             }
         }
     });
