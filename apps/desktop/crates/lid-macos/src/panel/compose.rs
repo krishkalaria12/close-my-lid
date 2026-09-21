@@ -312,68 +312,46 @@ fn section_title(mtm: MainThreadMarker, text: &str) -> Retained<NSTextField> {
 
 /// Positions everything and returns the panel's total height.
 ///
-/// Sections are placed from the top down; each one then lays out its own
-/// contents in local coordinates, which is why a section can be moved without
-/// touching anything inside it.
+/// The stacking itself comes from [`PanelStack`], which is pure and tested;
+/// this only hands each section the frame the stack computed and then lets it
+/// lay out its own contents in local coordinates.
 pub(super) fn place(views: &Views, has_battery: bool) -> f64 {
-    let heights = PanelHeights::new(views.agent_rows.len(), has_battery);
+    let stack = layout::PanelStack::new(views.agent_rows.len(), has_battery);
 
-    set_frame(&views.content, 0.0, 0.0, layout::WIDTH, heights.total);
+    set_frame(&views.content, 0.0, 0.0, layout::WIDTH, stack.total);
 
-    // Sections, top down. `cursor` is the y of the next section's top edge.
-    let mut cursor = heights.total;
-    let mut rules = views.separators.iter();
-
-    let section = |view: &NSView, height: f64, cursor: &mut f64| {
-        *cursor -= height;
-        set_frame(view, 0.0, *cursor, layout::WIDTH, height);
-    };
-    let rule = |cursor: &mut f64, rules: &mut std::slice::Iter<'_, Retained<NSView>>| {
-        let Some(rule) = rules.next() else {
-            return;
-        };
-        *cursor -= layout::SEPARATOR;
-        set_frame(
-            rule,
-            layout::PAD,
-            *cursor,
-            layout::CONTENT,
-            layout::SEPARATOR,
-        );
-        rule.setHidden(false);
+    let section = |view: &NSView, slot: layout::Slot| {
+        set_frame(view, 0.0, slot.y, layout::WIDTH, slot.height);
     };
 
-    section(&views.header, heights.header, &mut cursor);
-    rule(&mut cursor, &mut rules);
-
+    section(&views.header, stack.header);
     views.battery_section.setHidden(!has_battery);
-    if has_battery {
-        section(&views.battery_section, heights.battery, &mut cursor);
-        rule(&mut cursor, &mut rules);
+    if let Some(slot) = stack.battery {
+        section(&views.battery_section, slot);
     }
+    section(&views.agents_section, stack.agents);
+    section(&views.hold_section, stack.hold);
+    section(&views.footer_section, stack.footer);
 
-    section(&views.agents_section, heights.agents, &mut cursor);
-    rule(&mut cursor, &mut rules);
-
-    section(&views.hold_section, heights.hold, &mut cursor);
-    rule(&mut cursor, &mut rules);
-
-    section(&views.footer_section, heights.footer, &mut cursor);
-
-    // The spare rule, when there is no battery section to separate.
-    for rule in rules {
+    // The spare rule, when there is no battery section to separate, is hidden
+    // rather than created and destroyed.
+    for (rule, slot) in views.separators.iter().zip(&stack.rules) {
+        set_frame(rule, layout::PAD, slot.y, layout::CONTENT, slot.height);
+        rule.setHidden(false);
+    }
+    for rule in views.separators.iter().skip(stack.rules.len()) {
         rule.setHidden(true);
     }
 
-    place_header(views, heights.header);
-    if has_battery {
-        place_battery(views, heights.battery);
+    place_header(views, stack.header.height);
+    if let Some(slot) = stack.battery {
+        place_battery(views, slot.height);
     }
-    place_agents(views, heights.agents);
-    place_hold(views, heights.hold);
-    place_footer(views, heights.footer);
+    place_agents(views, stack.agents.height);
+    place_hold(views, stack.hold.height);
+    place_footer(views, stack.footer.height);
 
-    heights.total
+    stack.total
 }
 
 fn place_header(views: &Views, height: f64) {

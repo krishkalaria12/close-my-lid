@@ -112,6 +112,110 @@ impl PanelHeights {
     }
 }
 
+/// A placed band of the panel: its bottom edge and its height, in the panel's
+/// own bottom-left-origin coordinates.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Slot {
+    pub y: f64,
+    pub height: f64,
+}
+
+impl Slot {
+    /// The band's upper edge.
+    #[cfg(test)]
+    pub fn top(self) -> f64 {
+        self.y + self.height
+    }
+}
+
+/// Where every section and separator sits.
+///
+/// Split out from the AppKit code so the stacking is checkable: `place` can
+/// only be exercised with a window and a main thread, but getting these
+/// numbers wrong is exactly how sections end up overlapping or leaving a band
+/// of dead space, and that is pure arithmetic.
+#[derive(Debug)]
+pub struct PanelStack {
+    pub header: Slot,
+    /// `None` on a Mac with no battery, which hides the section entirely.
+    pub battery: Option<Slot>,
+    pub agents: Slot,
+    pub hold: Slot,
+    pub footer: Slot,
+    /// One rule above every section after the header, top-down.
+    pub rules: Vec<Slot>,
+    pub total: f64,
+}
+
+impl PanelStack {
+    pub fn new(agent_rows: usize, has_battery: bool) -> Self {
+        let heights = PanelHeights::new(agent_rows, has_battery);
+
+        let mut cursor = heights.total;
+        let mut rules = Vec::with_capacity(4);
+
+        let section = |height: f64, cursor: &mut f64| {
+            *cursor -= height;
+            Slot { y: *cursor, height }
+        };
+
+        let header = section(heights.header, &mut cursor);
+
+        let rule = |cursor: &mut f64, rules: &mut Vec<Slot>| {
+            *cursor -= SEPARATOR;
+            rules.push(Slot {
+                y: *cursor,
+                height: SEPARATOR,
+            });
+        };
+
+        rule(&mut cursor, &mut rules);
+        let battery = has_battery.then(|| {
+            let slot = section(heights.battery, &mut cursor);
+            rule(&mut cursor, &mut rules);
+            slot
+        });
+
+        let agents = section(heights.agents, &mut cursor);
+        rule(&mut cursor, &mut rules);
+
+        let hold = section(heights.hold, &mut cursor);
+        rule(&mut cursor, &mut rules);
+
+        let footer = section(heights.footer, &mut cursor);
+
+        Self {
+            header,
+            battery,
+            agents,
+            hold,
+            footer,
+            rules,
+            total: heights.total,
+        }
+    }
+
+    /// Every band in the panel, top-down.
+    #[cfg(test)]
+    pub fn bands(&self) -> Vec<Slot> {
+        let sections = [
+            Some(self.header),
+            self.battery,
+            Some(self.agents),
+            Some(self.hold),
+            Some(self.footer),
+        ];
+        let mut bands: Vec<Slot> = sections
+            .into_iter()
+            .flatten()
+            .chain(self.rules.iter().copied())
+            .collect();
+        // Top-down: a larger `y` is further up the panel.
+        bands.sort_by(|a, b| b.y.total_cmp(&a.y));
+        bands
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,6 +235,73 @@ mod tests {
         let sections =
             heights.header + heights.battery + heights.agents + heights.hold + heights.footer;
         assert_eq!(heights.total, sections + 4.0 * SEPARATOR);
+    }
+
+    /// Every band in the panel, in order, with nothing overlapping and nothing
+    /// left over. This is what `place` relies on to hand each section a frame.
+    fn assert_tiles(stack: &PanelStack) {
+        let bands = stack.bands();
+        assert!(!bands.is_empty());
+
+        let mut edge = stack.total;
+        for band in &bands {
+            assert!(
+                band.height > 0.0,
+                "a zero-height band draws nothing: {band:?}"
+            );
+            assert_eq!(
+                band.top(),
+                edge,
+                "bands must meet exactly; {band:?} does not start at {edge}"
+            );
+            edge = band.y;
+        }
+        assert_eq!(edge, 0.0, "the stack must reach the bottom of the panel");
+    }
+
+    #[test]
+    fn every_section_tiles_the_panel_with_a_battery() {
+        let stack = PanelStack::new(7, true);
+        assert!(stack.battery.is_some());
+        assert_eq!(stack.rules.len(), 4);
+        assert_tiles(&stack);
+    }
+
+    #[test]
+    fn every_section_tiles_the_panel_without_one() {
+        let stack = PanelStack::new(7, false);
+        assert!(stack.battery.is_none());
+        assert_eq!(
+            stack.rules.len(),
+            3,
+            "the battery rule goes with its section"
+        );
+        assert_tiles(&stack);
+    }
+
+    #[test]
+    fn the_stack_survives_a_change_in_the_number_of_agents() {
+        // The agent list is the one section whose height depends on data, so
+        // it is the one that could silently start overlapping the rest.
+        for rows in [1, 2, 7, 12] {
+            for has_battery in [true, false] {
+                assert_tiles(&PanelStack::new(rows, has_battery));
+            }
+        }
+    }
+
+    #[test]
+    fn sections_run_in_reading_order() {
+        let stack = PanelStack::new(7, true);
+        let battery = stack.battery.unwrap();
+        assert!(
+            stack.header.y > battery.y,
+            "the header sits above the battery"
+        );
+        assert!(battery.y > stack.agents.y);
+        assert!(stack.agents.y > stack.hold.y);
+        assert!(stack.hold.y > stack.footer.y);
+        assert_eq!(stack.footer.y, 0.0, "the footer sits on the bottom edge");
     }
 
     #[test]

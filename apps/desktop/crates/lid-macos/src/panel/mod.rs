@@ -36,7 +36,6 @@ use crate::ui::{
     monospaced_digit_font, place_trailing, rgb, separator_color, set_frame, set_text, system_font,
 };
 
-use layout::PanelHeights;
 pub use layout::{ANCHOR_GAP, SCREEN_MARGIN, WIDTH};
 
 /// Escape's virtual key code.
@@ -256,10 +255,15 @@ impl Panel {
             self.views.toggle.setState(wanted);
         }
 
+        // Whether the machine has a battery at all, which is what decides the
+        // layout. A reading that momentarily fails is not a machine that lost
+        // its battery, and must not tear the panel down and rebuild it — so
+        // only a section that is currently empty may re-examine this.
         let battery = controller.battery();
-        if self.laid_out_with_battery.get() != battery.is_some() {
+        let has_battery = battery.is_some() || self.laid_out_with_battery.get();
+        if self.laid_out_with_battery.get() != has_battery {
             drop(controller);
-            self.apply_layout(battery.is_some());
+            self.apply_layout(has_battery);
             self.reposition();
             return self.refresh(app);
         }
