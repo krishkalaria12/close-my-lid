@@ -236,7 +236,7 @@ impl Controller {
             Ok(true) => {
                 self.clear_heartbeat();
                 self.notifier.cancel_pending();
-                self.notifier.deliver_now(
+                self.notifier.report_battery_release(
                     lidcore::APP_NAME,
                     "Battery is low, so normal closed-lid sleep is back on.",
                 );

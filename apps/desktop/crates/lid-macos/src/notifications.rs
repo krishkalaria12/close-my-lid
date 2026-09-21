@@ -22,8 +22,15 @@ mod identifier {
     pub const STARTED: &str = "app.closemylid.notification.started";
     pub const ENDING_SOON: &str = "app.closemylid.notification.ending-soon";
     pub const ENDED: &str = "app.closemylid.notification.ended";
+    /// The battery safety release, which is not part of any session plan:
+    /// posting it under `STARTED` would let the next hold's "started" message
+    /// replace an explanation the user has not read yet, and vice versa.
+    pub const BATTERY: &str = "app.closemylid.notification.battery";
 
-    pub const ALL: [&str; 3] = [STARTED, ENDING_SOON, ENDED];
+    /// The planned messages, which a new plan replaces. `BATTERY` is
+    /// deliberately absent: it is delivered immediately and never pending, so
+    /// there is nothing about it to cancel.
+    pub const PLANNED: [&str; 3] = [STARTED, ENDING_SOON, ENDED];
 }
 
 pub struct Notifier {
@@ -91,11 +98,11 @@ impl Notifier {
         }
     }
 
-    /// Delivers one message right now, outside any plan. Used when the battery
-    /// safety release ends a hold the user did not ask to end.
-    pub fn deliver_now(&self, title: &str, body: &str) {
+    /// Delivers the battery safety notice right now, outside any plan. The
+    /// release ends a hold the user did not ask to end, so it has to say so.
+    pub fn report_battery_release(&self, title: &str, body: &str) {
         if let Some(center) = &self.center {
-            add(center, identifier::STARTED, title, body, None);
+            add(center, identifier::BATTERY, title, body, None);
         }
     }
 
@@ -106,7 +113,7 @@ impl Notifier {
         let Some(center) = &self.center else {
             return;
         };
-        let identifiers: Vec<Retained<NSString>> = identifier::ALL
+        let identifiers: Vec<Retained<NSString>> = identifier::PLANNED
             .iter()
             .map(|id| NSString::from_str(id))
             .collect();
