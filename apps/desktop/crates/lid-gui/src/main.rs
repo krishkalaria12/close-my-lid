@@ -14,6 +14,13 @@
     windows_subsystem = "windows"
 )]
 
+// The tray app is Windows-only (macOS builds exist solely to iterate on the
+// panel from a Mac). Linux has no tray to anchor to — the CLI is the product
+// there — and `Cargo.toml` intentionally provides no gpui dependency for it,
+// so fail here with a clear message instead of a wall of missing-crate errors.
+#[cfg(target_os = "linux")]
+compile_error!("lid-gui is Windows-only; on Linux use the `close-my-lid` CLI");
+
 mod anchor;
 mod config;
 mod error;
@@ -113,12 +120,20 @@ fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
     cx.on_tray_menu_action(move |id, cx| match id.as_ref() {
         action::PANEL => open_panel(state.clone(), cx),
         action::STOP => {
-            state.update(cx, |state, cx| {
+            let headline: Option<String> = state.update(cx, |state, cx| {
                 if let Err(error) = state.stop() {
                     tracing::error!(%error, hint = error.hint(), "could not stop the hold");
+                    cx.notify();
+                    return error.deserves_notification().then(|| error.headline());
                 }
                 cx.notify();
+                None
             });
+            // Release builds hide the console, so refusals must surface as a
+            // notification — otherwise the click silently does nothing.
+            if let Some(headline) = headline {
+                let _ = cx.show_notification(APP_NAME, headline);
+            }
         }
         action::QUIT => {
             // Release before exiting; on Windows the power-scheme edit would
@@ -138,12 +153,18 @@ fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
             else {
                 return;
             };
-            state.update(cx, |state, cx| {
+            let headline: Option<String> = state.update(cx, |state, cx| {
                 if let Err(error) = state.start(duration) {
                     tracing::error!(%error, hint = error.hint(), "could not start the hold");
+                    cx.notify();
+                    return error.deserves_notification().then(|| error.headline());
                 }
                 cx.notify();
+                None
             });
+            if let Some(headline) = headline {
+                let _ = cx.show_notification(APP_NAME, headline);
+            }
         }
     });
 }

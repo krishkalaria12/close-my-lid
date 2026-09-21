@@ -39,7 +39,14 @@ impl SessionDuration {
             Self::Indefinite => "Unlimited".to_string(),
             Self::Timed { minutes } if *minutes < 60 => format!("{minutes} min"),
             Self::Timed { minutes } if *minutes == 60 => "1 hour".to_string(),
-            Self::Timed { minutes } => format!("{} hours", minutes / 60),
+            Self::Timed { minutes } if minutes % 60 == 0 => {
+                format!("{} hours", minutes / 60)
+            }
+            // Non-hour multiples (e.g. `--for 90`): previously rendered as
+            // "1 hours" via truncating division. Show both parts instead.
+            Self::Timed { minutes } => {
+                format!("{}h {}m", minutes / 60, minutes % 60)
+            }
         }
     }
 
@@ -104,5 +111,12 @@ mod tests {
     #[test]
     fn indefinite_sessions_have_no_end() {
         assert!(SessionDuration::Indefinite.end_at(Utc::now()).is_none());
+    }
+
+    #[test]
+    fn labels_do_not_truncate_partial_hours() {
+        assert_eq!(SessionDuration::Timed { minutes: 90 }.label(), "1h 30m");
+        assert_eq!(SessionDuration::Timed { minutes: 120 }.label(), "2 hours");
+        assert_eq!(SessionDuration::THIRTY_MINUTES.label(), "30 min");
     }
 }

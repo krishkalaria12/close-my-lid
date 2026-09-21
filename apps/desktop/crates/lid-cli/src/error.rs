@@ -45,7 +45,9 @@ impl CliError {
             // EX_NOPERM: understood and refused.
             Self::Lid(LidError::Denied { .. }) => ExitCode::from(77),
             // EX_OSFILE / EX_IOERR for state and output problems.
-            Self::Lid(LidError::Io { .. } | LidError::Decode { .. }) => ExitCode::from(72),
+            Self::Lid(LidError::Io { .. } | LidError::Decode { .. } | LidError::Encode { .. }) => {
+                ExitCode::from(72)
+            }
             Self::Output(_) => ExitCode::from(74),
             _ => ExitCode::FAILURE,
         }

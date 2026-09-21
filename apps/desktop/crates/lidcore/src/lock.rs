@@ -22,7 +22,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System, UpdateKind};
 use tracing::{debug, warn};
 
 use crate::config;
@@ -39,28 +39,85 @@ impl HoldLock {
     ///
     /// Fails if another *live* process already holds it. A lock left behind by
     /// a process that is gone is taken over, since nothing is holding then.
+    ///
+    /// Uses atomic `create_new` so two simultaneous `enable` invocations cannot
+    /// both win the check-then-write race (on Windows the loser would save the
+    /// winner's temporary lid values as if they were the user's own).
     pub fn acquire() -> Result<Self> {
         let path = lock_path()?;
-
-        if let Some(pid) = live_owner(&path) {
-            return Err(LidError::denied(
-                "start a hold",
-                format!("another Close My Lid process (pid {pid}) is already holding"),
-            )
-            .with_hint(
-                "Stop the existing hold first with `close-my-lid disable`, or \
-                 press Ctrl-C in the terminal running it.",
-            ));
-        }
-
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|error| LidError::io("create", parent, error))?;
         }
-        fs::write(&path, std::process::id().to_string())
-            .map_err(|error| LidError::io("write", &path, error))?;
 
-        debug!(pid = std::process::id(), "took the hold lock");
-        Ok(Self { path })
+        // Fast path: a live owner blocks us without touching the filesystem.
+        if let Some(pid) = live_owner(&path) {
+            return Self::already_held(pid);
+        }
+
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                use std::io::Write as _;
+                file.write_all(std::process::id().to_string().as_bytes())
+                    .map_err(|error| LidError::io("write", &path, error))?;
+                debug!(pid = std::process::id(), "took the hold lock");
+                Ok(Self { path })
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Lost the race, or a stale lock was cleared between our check
+                // and the create. Re-check once: a stale lock is cleared by
+                // `live_owner`, freeing us to retry exactly once.
+                if live_owner(&path).is_none() {
+                    // Stale was just cleared; retry the atomic create.
+                    match std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&path)
+                    {
+                        Ok(mut file) => {
+                            use std::io::Write as _;
+                            file.write_all(std::process::id().to_string().as_bytes())
+                                .map_err(|e| LidError::io("write", &path, e))?;
+                            debug!(pid = std::process::id(), "took the hold lock after stale");
+                            return Ok(Self { path });
+                        }
+                        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                            // Someone else won the retry race.
+                            if let Some(pid) = live_owner(&path) {
+                                return Self::already_held(pid);
+                            }
+                        }
+                        Err(error) => return Err(LidError::io("write", &path, error)),
+                    }
+                } else if let Some(pid) = live_owner(&path) {
+                    return Self::already_held(pid);
+                }
+                // Lock file exists but names no live owner (e.g. garbage that
+                // `live_owner` left behind): overwrite it — we are the owner.
+                fs::write(&path, std::process::id().to_string())
+                    .map_err(|error| LidError::io("write", &path, error))?;
+                debug!(
+                    pid = std::process::id(),
+                    "took the hold lock (overwrote dead file)"
+                );
+                Ok(Self { path })
+            }
+            Err(error) => Err(LidError::io("write", &path, error)),
+        }
+    }
+
+    fn already_held(pid: u32) -> Result<Self> {
+        Err(LidError::denied(
+            "start a hold",
+            format!("another Close My Lid process (pid {pid}) is already holding"),
+        )
+        .with_hint(
+            "Stop the existing hold first with `close-my-lid disable`, or \
+             press Ctrl-C in the terminal running it.",
+        ))
     }
 
     /// The pid of the live process currently holding, if any.
@@ -89,7 +146,14 @@ impl HoldLock {
 
         let process = system.process(target)?;
         // Term, not Kill: the owner must run its release path on the way out.
-        match process.kill_with(Signal::Term) {
+        // NOTE: sysinfo supports only `Kill` on Windows (taskkill /F), so a
+        // graceful Term is Unix-only. On Windows the caller falls back to
+        // restoring via the recovery record after the wait.
+        #[cfg(not(target_os = "windows"))]
+        let signal = Signal::Term;
+        #[cfg(target_os = "windows")]
+        let signal = Signal::Kill;
+        match process.kill_with(signal) {
             Some(true) => Some(pid),
             _ => {
                 warn!(pid, "could not signal the process holding the lid");
@@ -117,6 +181,11 @@ fn lock_path() -> Result<PathBuf> {
     Ok(config::config_dir()?.join("hold.pid"))
 }
 
+/// Binary names that may legitimately own the hold, used to detect pid reuse.
+/// Without this, an unrelated process that recycled a dead owner's pid would
+/// block new holds until that pid exits.
+const OWNER_BINARIES: [&str; 2] = ["close-my-lid", "close-my-lid-gui"];
+
 /// The pid in the lock file, but only if that process is still running.
 ///
 /// Clears the file when the owner is gone so the next caller does not have to
@@ -134,16 +203,46 @@ fn live_owner(path: &PathBuf) -> Option<u32> {
     system.refresh_processes_specifics(
         ProcessesToUpdate::Some(&[target]),
         true,
-        ProcessRefreshKind::nothing(),
+        ProcessRefreshKind::nothing().with_exe(UpdateKind::Always),
     );
 
-    if system.process(target).is_some() {
-        Some(pid)
-    } else {
+    let Some(process) = system.process(target) else {
         debug!(pid, "clearing a stale hold lock");
         let _ = fs::remove_file(path);
-        None
+        return None;
+    };
+    if !looks_like_owner(process) {
+        debug!(
+            pid,
+            name = %process.name().to_string_lossy(),
+            "lock names a recycled pid; clearing it"
+        );
+        let _ = fs::remove_file(path);
+        return None;
     }
+    Some(pid)
+}
+
+/// True when the process plausibly is a Close My Lid holder: name or exe
+/// stem matches our binaries. A recycled pid running e.g. a browser fails
+/// this and the stale lock is cleared instead of blocking holds.
+fn looks_like_owner(process: &sysinfo::Process) -> bool {
+    let name = process.name().to_string_lossy().to_lowercase();
+    // Windows reports `close-my-lid.exe`; compare the bare stem.
+    let stem = name.strip_suffix(".exe").unwrap_or(&name).to_lowercase();
+    if OWNER_BINARIES.contains(&stem.as_str()) {
+        return true;
+    }
+    if let Some(exe) = process.exe() {
+        let exe_stem = exe
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+        if OWNER_BINARIES.contains(&exe_stem.as_str()) {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]

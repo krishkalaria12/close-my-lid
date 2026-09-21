@@ -106,6 +106,19 @@ impl SleepSessionController {
             return Ok(true);
         }
 
+        // The OS hold can disappear under us (Windows: user changed the lid
+        // action in Control Panel mid-hold). Log it so diagnostics explain
+        // why a supposedly active session is not actually holding.
+        match self.power.is_held() {
+            Ok(false) => {
+                debug!("session is recorded as active but the OS is not holding");
+            }
+            Err(error) => {
+                debug!(%error, "could not verify the OS hold during supervision");
+            }
+            Ok(true) => {}
+        }
+
         Ok(false)
     }
 
@@ -124,7 +137,13 @@ impl SleepSessionController {
             return Ok(());
         }
 
-        let held = self.power.is_held().unwrap_or(false);
+        let held = match self.power.is_held() {
+            Ok(held) => held,
+            Err(error) => {
+                debug!(%error, "could not query the OS hold; assuming not held");
+                false
+            }
+        };
 
         match (self.state.is_active(), held) {
             // Saved session already over, but the OS is still holding.
@@ -137,9 +156,18 @@ impl SleepSessionController {
                 warn!("found a lid hold with no session; releasing it");
                 self.power.release()?;
             }
-            // State claims a session the OS is not honouring.
+            // State claims a session the OS is not honouring. On Windows the
+            // previous scheme values may still be stranded in the non-active
+            // scheme (user switched plans mid-hold), so release first to
+            // restore them rather than just forgetting the state.
             (true, false) => {
                 warn!("saved session is no longer held by the system; clearing it");
+                // Best-effort: on Linux this is a no-op; on Windows it
+                // restores a stranded non-active scheme. Never fail
+                // reconciliation because of it.
+                if let Err(error) = self.power.release() {
+                    debug!(%error, "best-effort release during reconciliation failed");
+                }
                 self.state = SleepControlState::Inactive;
                 self.store.save(&self.state)?;
             }

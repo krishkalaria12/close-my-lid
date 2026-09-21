@@ -50,10 +50,26 @@ pub fn backend() -> Result<Box<dyn LidPowerBackend>> {
     {
         Ok(Box::new(windows::PowerSchemeLidGuard::new()))
     }
+
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     {
         Err(crate::error::LidError::UnsupportedPlatform {
             os: std::env::consts::OS,
         })
     }
+}
+
+/// A backend that never adopts another process's recovery state, for
+/// read-only paths (`status`, `agents`). On Windows a full `backend()` would
+/// adopt `windows-lid-action.json`; dropping that guard must not release a
+/// live hold owned elsewhere, so inspection uses this instead.
+#[cfg(target_os = "windows")]
+pub fn backend_readonly() -> Result<Box<dyn LidPowerBackend>> {
+    Ok(Box::new(windows::PowerSchemeLidGuard::open_readonly()))
+}
+
+/// Non-Windows platforms have no adopt-on-open, so readonly is identical.
+#[cfg(not(target_os = "windows"))]
+pub fn backend_readonly() -> Result<Box<dyn LidPowerBackend>> {
+    backend()
 }

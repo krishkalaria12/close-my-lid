@@ -128,11 +128,16 @@ fn enable(duration: SessionDuration) -> Result<()> {
 
     // The hold lives as long as this loop does. On Linux that is literal: the
     // logind descriptor is owned by the controller and closes when we return.
+    // Sleep in short slices so Ctrl-C exits promptly instead of waiting out
+    // the full 15s supervision interval.
     while running.load(Ordering::SeqCst) {
         if controller.tick()? {
             return render::hold_expired();
         }
-        std::thread::sleep(config::SUPERVISION_INTERVAL);
+        let deadline = std::time::Instant::now() + config::SUPERVISION_INTERVAL;
+        while running.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
+            std::thread::sleep(config::SHUTDOWN_POLL_INTERVAL);
+        }
     }
 
     controller.stop()?;
@@ -146,9 +151,26 @@ fn disable() -> Result<()> {
     if let Some(pid) = HoldLock::signal_owner() {
         render::asked_owner_to_stop(pid)?;
         wait_for_owner_to_exit();
+        // If the owner is still alive, its hold is still in force. Clearing
+        // our own state file now would report "Off" while the machine is
+        // still held, so fail loudly instead.
+        if let Some(still) = HoldLock::owner() {
+            return Err(lidcore::LidError::denied(
+                "stop the existing hold",
+                format!("the holding process (pid {still}) did not exit"),
+            )
+            .with_hint(
+                "The holding process may be ignoring the stop request. \
+                 Press Ctrl-C in its terminal, or stop it from Task Manager / `kill`.",
+            )
+            .into());
+        }
+        // Owner exited cleanly: it already ran its own release path.
+        // Fall through to clean any stranded OS state below.
     }
 
     let mut controller = SleepSessionController::new()?;
+    controller.reconcile_at_launch()?;
     controller.stop()?;
     render::line(&format!("{APP_NAME} restored normal sleep behaviour."))
 }
@@ -166,7 +188,11 @@ fn wait_for_owner_to_exit() {
 }
 
 fn status(json: bool) -> Result<()> {
-    let controller = SleepSessionController::new()?;
+    // Read-only backend: on Windows this avoids adopting another process's
+    // recovery record (which must never be released by an inspector).
+    let backend = lidcore::backend_readonly()?;
+    let store = lidcore::SleepSessionStore::new()?;
+    let controller = SleepSessionController::with_parts(backend, store);
     // The state file records intent, not reality. A killed `enable` on Linux
     // loses its inhibitor silently, so ask what is actually in force.
     render::status(

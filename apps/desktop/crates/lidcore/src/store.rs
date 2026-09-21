@@ -79,7 +79,7 @@ impl SleepSessionStore {
             fs::create_dir_all(parent).map_err(|error| LidError::io("create", parent, error))?;
         }
 
-        let encoded = serde_json::to_string_pretty(state).map_err(|source| LidError::Decode {
+        let encoded = serde_json::to_string_pretty(state).map_err(|source| LidError::Encode {
             path: self.path.clone(),
             source,
         })?;

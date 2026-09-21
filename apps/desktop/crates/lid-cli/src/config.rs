@@ -23,6 +23,10 @@ pub const RELEASE_WAIT_POLLS: u32 = 50;
 /// Gap between those polls.
 pub const RELEASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
+/// Granularity of the shutdown check inside each supervision interval, so
+/// Ctrl-C during `enable` exits within ~250ms instead of after 15s.
+pub const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
 /// Tracing filter used when `--verbose` is absent.
 pub const DEFAULT_LOG_LEVEL: &str = "warn";
 

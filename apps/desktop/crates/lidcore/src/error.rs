@@ -57,6 +57,13 @@ pub enum LidError {
         source: serde_json::Error,
     },
 
+    #[error("could not encode state for {}", path.display())]
+    Encode {
+        path: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
+
     #[error("could not work out where to store configuration")]
     NoConfigDir,
 }
@@ -122,7 +129,7 @@ impl LidError {
                 "No home directory could be determined. Set HOME (or APPDATA on \
                  Windows) and try again.",
             ),
-            Self::Io { .. } | Self::Decode { .. } => None,
+            Self::Io { .. } | Self::Decode { .. } | Self::Encode { .. } => None,
         }
     }
 

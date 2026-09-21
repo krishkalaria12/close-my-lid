@@ -24,10 +24,15 @@ const SYSTEMD_UNIT: &str = r#"# Save to ~/.config/systemd/user/close-my-lid.serv
 [Unit]
 Description=Close My Lid — hold the lid open for long-running work
 Documentation=https://github.com/krishkalaria12/close-my-lid
+After=systemd-logind.service
+Wants=systemd-logind.service
 
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/close-my-lid enable --for unlimited
+# No auto-restart: after a crash the state file still says Active while no
+# hold exists, and the next manual `enable` reconciles that honestly instead
+# of silently re-taking a hold the user may no longer want.
 Restart=no
 
 [Install]

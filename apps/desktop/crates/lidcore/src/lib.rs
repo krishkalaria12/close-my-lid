@@ -36,7 +36,7 @@ pub use config::{APP_ID, APP_NAME, VERSION};
 pub use duration::SessionDuration;
 pub use error::{LidError, Result};
 pub use lock::HoldLock;
-pub use power::{LidPowerBackend, backend};
+pub use power::{LidPowerBackend, backend, backend_readonly};
 pub use session::SleepSessionController;
 pub use state::SleepControlState;
 pub use store::SleepSessionStore;
