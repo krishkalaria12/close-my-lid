@@ -54,6 +54,10 @@ pub fn hold_started(duration: SessionDuration, backend: &str) -> Result<()> {
     line("Press Ctrl-C to release.")
 }
 
+pub fn asked_owner_to_stop(pid: u32) -> Result<()> {
+    line(&format!("Asking the holding process (pid {pid}) to stop…"))
+}
+
 pub fn hold_expired() -> Result<()> {
     line("\nSession ended; normal sleep restored.")
 }
@@ -62,12 +66,28 @@ pub fn hold_released() -> Result<()> {
     line("\nReleased. Normal sleep restored.")
 }
 
-pub fn status(state: &SleepControlState, backend: &str, json: bool) -> Result<()> {
+/// Reports the hold.
+///
+/// `held` is what the system actually reports, which can disagree with the
+/// recorded `state`: a killed `enable` on Linux loses its inhibitor without
+/// getting the chance to update the file. Reality wins, and the disagreement
+/// is called out rather than silently papered over.
+pub fn status(
+    state: &SleepControlState,
+    held: bool,
+    owner: Option<u32>,
+    backend: &str,
+    json: bool,
+) -> Result<()> {
     let now = Utc::now();
+    let stale = state.is_active() && !held;
 
     if json {
         let payload = serde_json::json!({
-            "active": state.is_active(),
+            "active": held,
+            "recorded_active": state.is_active(),
+            "stale": stale,
+            "owner_pid": owner,
             "summary": state.summary(now),
             "ends_at": state.ends_at(),
             "remaining_seconds": state.remaining(now).map(|left| left.num_seconds()),
@@ -76,7 +96,17 @@ pub fn status(state: &SleepControlState, backend: &str, json: bool) -> Result<()
         return line(&serde_json::to_string_pretty(&payload).unwrap_or_default());
     }
 
-    line(&state.summary(now))?;
+    if stale {
+        line("Off — sleeps normally")?;
+        line("note: a session was recorded but nothing is holding the lid;")?;
+        line("      the process that owned it is gone. Run `close-my-lid enable` to restart it.")?;
+    } else {
+        line(&state.summary(now))?;
+    }
+
+    if let Some(pid) = owner {
+        line(&format!("held by: pid {pid}"))?;
+    }
     line(&format!("mechanism: {backend}"))
 }
 

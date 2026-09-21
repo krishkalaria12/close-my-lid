@@ -16,6 +16,13 @@ pub const SUPERVISION_INTERVAL: Duration = lidcore::config::SUPERVISION_INTERVAL
 /// behaviour of holding until told otherwise.
 pub const DEFAULT_DURATION: &str = "unlimited";
 
+/// How long `disable` waits for a signalled holder to exit, as a poll count
+/// times the interval below.
+pub const RELEASE_WAIT_POLLS: u32 = 50;
+
+/// Gap between those polls.
+pub const RELEASE_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
 /// Tracing filter used when `--verbose` is absent.
 pub const DEFAULT_LOG_LEVEL: &str = "warn";
 

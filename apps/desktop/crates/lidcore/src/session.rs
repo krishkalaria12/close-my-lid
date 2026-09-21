@@ -5,11 +5,12 @@
 //! restart can tell whether a hold was meant to be running.
 
 use chrono::Utc;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::battery::{self, BatterySafetyPolicy};
 use crate::duration::SessionDuration;
 use crate::error::Result;
+use crate::lock::HoldLock;
 use crate::power::{LidPowerBackend, backend};
 use crate::state::SleepControlState;
 use crate::store::SleepSessionStore;
@@ -43,6 +44,19 @@ impl SleepSessionController {
 
     pub fn describe_backend(&self) -> &'static str {
         self.power.describe()
+    }
+
+    /// Whether a hold is genuinely in force right now, as opposed to merely
+    /// recorded in the state file.
+    ///
+    /// Two sources, because the platforms disagree about where the truth
+    /// lives. On Windows the change is global and persistent, so the OS is
+    /// authoritative. On Linux the inhibitor belongs to a process and dies
+    /// with it, so the live owner of the pid lock is authoritative — this
+    /// backend's own descriptor says nothing about a hold another process
+    /// took.
+    pub fn is_really_held(&self) -> bool {
+        self.power.is_held().unwrap_or(false) || HoldLock::owner().is_some()
     }
 
     pub fn start(&mut self, duration: SessionDuration) -> Result<()> {
@@ -101,6 +115,15 @@ impl SleepSessionController {
     /// strand its power-scheme edit; Linux cannot), and a hold whose deadline
     /// passed while nothing was running.
     pub fn reconcile_at_launch(&mut self) -> Result<()> {
+        // Another live process may legitimately own the hold; clearing its
+        // state or releasing on its behalf would be wrong.
+        if let Some(pid) = HoldLock::owner()
+            && pid != std::process::id()
+        {
+            debug!(pid, "another process owns the hold; leaving it alone");
+            return Ok(());
+        }
+
         let held = self.power.is_held().unwrap_or(false);
 
         match (self.state.is_active(), held) {

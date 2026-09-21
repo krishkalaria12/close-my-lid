@@ -6,13 +6,18 @@
 use std::collections::HashMap;
 
 use lidcore::{
-    AgentHarness, BatteryStatus, SessionDuration, SleepControlState, SleepSessionController,
-    battery,
+    AgentHarness, BatteryStatus, HoldLock, SessionDuration, SleepControlState,
+    SleepSessionController, battery,
 };
 use tracing::{error, warn};
 
+use crate::error::{GuiError, Result};
+
 pub struct AppState {
     controller: Option<SleepSessionController>,
+    /// Held while this app owns the hold, so the tray app and the CLI cannot
+    /// take overlapping holds of the same global setting.
+    lock: Option<HoldLock>,
     /// Why the backend could not be built, if it could not be. Held as a typed
     /// error so the panel can show its hint, not just a message.
     pub startup_error: Option<GuiError>,
@@ -38,6 +43,7 @@ impl AppState {
 
         let mut state = Self {
             controller,
+            lock: None,
             startup_error,
             battery: None,
             agents: HashMap::new(),
@@ -65,16 +71,36 @@ impl AppState {
         self.agents = lidcore::sessions_now();
     }
 
-    pub fn start(&mut self, duration: SessionDuration) -> Result<(), String> {
-        let controller = self.controller.as_mut().ok_or("no lid backend")?;
-        controller
-            .start(duration)
-            .map_err(|error| error.to_string())
+    pub fn start(&mut self, duration: SessionDuration) -> Result<()> {
+        // Take the lock before touching the system: if the CLI is already
+        // holding, this fails with a message naming that process rather than
+        // quietly taking a second, conflicting hold of the same setting.
+        if self.lock.is_none() {
+            self.lock = Some(HoldLock::acquire()?);
+        }
+
+        if let Err(error) = self.controller_mut()?.start(duration) {
+            self.lock = None;
+            return Err(error.into());
+        }
+        Ok(())
     }
 
-    pub fn stop(&mut self) -> Result<(), String> {
-        let controller = self.controller.as_mut().ok_or("no lid backend")?;
-        controller.stop().map_err(|error| error.to_string())
+    pub fn stop(&mut self) -> Result<()> {
+        self.controller_mut()?.stop()?;
+        // Released only after the system change succeeded, so a failed stop
+        // does not advertise the hold as available.
+        self.lock = None;
+        Ok(())
+    }
+
+    /// The controller, or an error explaining why there isn't one.
+    fn controller_mut(&mut self) -> Result<&mut SleepSessionController> {
+        self.controller.as_mut().ok_or_else(|| GuiError::NoBackend {
+            source: lidcore::LidError::UnsupportedPlatform {
+                os: std::env::consts::OS,
+            },
+        })
     }
 
     /// One supervision pass. Returns true if the hold was released.
@@ -83,7 +109,12 @@ impl AppState {
             return false;
         };
         match controller.tick() {
-            Ok(released) => released,
+            Ok(released) => {
+                if released {
+                    self.lock = None;
+                }
+                released
+            }
             Err(error) => {
                 error!(%error, "supervision tick failed");
                 false

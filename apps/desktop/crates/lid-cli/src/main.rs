@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::{Parser, Subcommand};
-use lidcore::{APP_NAME, SessionDuration, SleepSessionController, VERSION};
+use lidcore::{APP_NAME, HoldLock, SessionDuration, SleepSessionController, VERSION};
 
 use crate::error::{CliError, Result};
 
@@ -110,6 +110,11 @@ fn init_tracing(verbose: bool) {
 }
 
 fn enable(duration: SessionDuration) -> Result<()> {
+    // Held for the lifetime of this function. A second `enable` fails here
+    // rather than taking an overlapping hold, which on Windows would see the
+    // first hold's temporary values as if they were the user's own.
+    let _lock = HoldLock::acquire()?;
+
     let mut controller = SleepSessionController::new()?;
     controller.reconcile_at_launch()?;
     controller.start(duration)?;
@@ -135,12 +140,40 @@ fn enable(duration: SessionDuration) -> Result<()> {
 }
 
 fn disable() -> Result<()> {
+    // A hold taken by another process cannot be released from here: on Linux
+    // the inhibitor is a descriptor that only its owner can close. Ask that
+    // process to stop and let it run its own release path.
+    if let Some(pid) = HoldLock::signal_owner() {
+        render::asked_owner_to_stop(pid)?;
+        wait_for_owner_to_exit();
+    }
+
     let mut controller = SleepSessionController::new()?;
     controller.stop()?;
     render::line(&format!("{APP_NAME} restored normal sleep behaviour."))
 }
 
+/// Waits for the signalled owner to release, so the message this command
+/// prints is true by the time the user reads it.
+fn wait_for_owner_to_exit() {
+    for _ in 0..config::RELEASE_WAIT_POLLS {
+        if HoldLock::owner().is_none() {
+            return;
+        }
+        std::thread::sleep(config::RELEASE_POLL_INTERVAL);
+    }
+    tracing::warn!("the holding process did not exit in time");
+}
+
 fn status(json: bool) -> Result<()> {
     let controller = SleepSessionController::new()?;
-    render::status(&controller.state(), controller.describe_backend(), json)
+    // The state file records intent, not reality. A killed `enable` on Linux
+    // loses its inhibitor silently, so ask what is actually in force.
+    render::status(
+        &controller.state(),
+        controller.is_really_held(),
+        HoldLock::owner(),
+        controller.describe_backend(),
+        json,
+    )
 }

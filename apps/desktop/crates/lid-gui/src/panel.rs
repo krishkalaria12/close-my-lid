@@ -5,10 +5,8 @@
 //! Windows-appropriate styling and Ctrl-key wording.
 
 use chrono::Utc;
-use gpui::{
-    App, ClickEvent, Context, Entity, FontWeight, IntoElement, ParentElement, Render, Styled,
-    Window, div, px,
-};
+use gpui::prelude::*;
+use gpui::{ClickEvent, Context, Entity, FontWeight, Window, div, px};
 use lidcore::{AgentHarness, BatterySafetyPolicy, SessionDuration};
 
 use crate::config;
