@@ -348,6 +348,13 @@ impl App {
 
     /// Fires a one-shot timer at the session's end, so a timed hold is
     /// released on time instead of whenever the next poll happens to land.
+    ///
+    /// Once that end has passed the timer becomes a *retry*, and retries back
+    /// off to the ordinary reconciliation interval. Without that, a release
+    /// that keeps failing — the passwordless grant is missing and the user
+    /// dismisses the administrator prompt — re-arms at the overshoot and asks
+    /// again half a second later, producing an unclosable loop of password
+    /// dialogs rather than one refusal and a retry on the next pass.
     fn arm_expiry_timer(self: &Rc<Self>) {
         if let Some(timer) = self.expiry_timer.borrow_mut().take() {
             timer.invalidate();
@@ -356,13 +363,15 @@ impl App {
         let Some(ends_at) = self.controller.borrow().ends_at() else {
             return;
         };
-        let remaining = (ends_at - chrono::Utc::now())
-            .to_std()
-            .unwrap_or(Duration::ZERO)
-            + config::EXPIRY_OVERSHOOT;
+
+        let delay = match (ends_at - chrono::Utc::now()).to_std() {
+            Ok(remaining) => remaining + config::EXPIRY_OVERSHOOT,
+            // Already past: the hold should be gone, and is not.
+            Err(_) => config::RECONCILE_INTERVAL,
+        };
 
         let app = self.clone();
-        let timer = one_shot_timer(remaining, move || app.reconcile());
+        let timer = one_shot_timer(delay, move || app.reconcile());
         *self.expiry_timer.borrow_mut() = Some(timer);
     }
 
