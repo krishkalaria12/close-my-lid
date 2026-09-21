@@ -1,14 +1,20 @@
 //! Counts running coding-agent sessions, so the UI can show what the hold is
 //! protecting.
 //!
-//! Ported from the Swift `AgentHarness` / `AgentSessionClassifier` pair. The
-//! macOS version walks the process table with `sysctl`; here `sysinfo` covers
-//! `/proc` on Linux and Toolhelp32 on Windows behind one API.
+//! Carried over from the Swift app's `AgentHarness` / `AgentSessionClassifier`
+//! pair. Classification is shared; taking the snapshot is not. macOS uses
+//! [`darwin`], which filters by uid in the kernel and reads arguments only
+//! where they are needed, while Linux and Windows go through `sysinfo`.
 
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+
+#[cfg(target_os = "macos")]
+mod darwin;
+
+#[cfg(target_os = "macos")]
+pub(crate) use darwin::describe as describe_process;
 
 /// A coding agent CLI whose sessions can be detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -113,8 +119,9 @@ impl AgentHarness {
     }
 }
 
-/// JavaScript runtimes that npm-installed harnesses run under.
-const SCRIPT_RUNTIMES: [&str; 2] = ["node", "bun"];
+/// JavaScript runtimes that npm-installed harnesses run under. Also the set
+/// whose arguments a snapshot has to pay for; see [`darwin`].
+pub(crate) const SCRIPT_RUNTIMES: [&str; 2] = ["node", "bun"];
 
 /// One running process, reduced to the fields needed for classification.
 #[derive(Debug, Clone)]
@@ -211,11 +218,31 @@ fn has_ancestor(
 }
 
 /// Snapshots the process table and counts sessions.
-///
-/// Note this counts every visible process, not just the current user's — the
-/// macOS version filters by uid, which has no clean cross-platform equivalent.
-/// On a single-user laptop, which is the target, the result is the same.
 pub fn sessions_now() -> HashMap<AgentHarness, usize> {
+    session_counts(&snapshot())
+}
+
+/// The current user's processes on macOS; every visible process elsewhere.
+///
+/// Linux and Windows have no clean equivalent of the kernel-side uid filter
+/// macOS gets from `proc_listpids`, and on the single-user laptop this targets
+/// the result is the same either way.
+fn snapshot() -> Vec<RunningProcess> {
+    #[cfg(target_os = "macos")]
+    {
+        darwin::snapshot()
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        sysinfo_snapshot()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn sysinfo_snapshot() -> Vec<RunningProcess> {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+
     let mut system = System::new();
     system.refresh_processes_specifics(
         ProcessesToUpdate::All,
@@ -225,7 +252,7 @@ pub fn sessions_now() -> HashMap<AgentHarness, usize> {
             .with_exe(UpdateKind::Always),
     );
 
-    let processes: Vec<RunningProcess> = system
+    system
         .processes()
         .iter()
         .map(|(pid, process)| RunningProcess {
@@ -238,9 +265,7 @@ pub fn sessions_now() -> HashMap<AgentHarness, usize> {
                 .map(|argument| argument.to_string_lossy().to_string())
                 .collect(),
         })
-        .collect();
-
-    session_counts(&processes)
+        .collect()
 }
 
 #[cfg(test)]

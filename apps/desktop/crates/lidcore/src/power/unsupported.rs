@@ -1,8 +1,7 @@
-//! Fallback so the workspace still builds on platforms with no backend —
-//! chiefly macOS, where the shipping Swift app in `apps/macos` owns this job.
+//! Fallback so the workspace still builds on platforms with no backend.
 //!
-//! This keeps `lidcore` and `lid-cli` compilable and testable on a Mac, which
-//! is where development happens.
+//! Linux, Windows and macOS each have a real backend; anything else gets this
+//! error so the failure names the platform instead of failing to compile.
 
 use crate::error::{LidError, Result};
 use crate::power::LidPowerBackend;

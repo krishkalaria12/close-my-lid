@@ -22,7 +22,6 @@
 use std::fs;
 use std::path::PathBuf;
 
-use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System, UpdateKind};
 use tracing::{debug, warn};
 
 use crate::config;
@@ -51,7 +50,7 @@ impl HoldLock {
 
         // Fast path: a live owner blocks us without touching the filesystem.
         if let Some(pid) = live_owner(&path) {
-            return Self::already_held(pid);
+            return Err(Self::already_held(pid));
         }
 
         match std::fs::OpenOptions::new()
@@ -87,13 +86,13 @@ impl HoldLock {
                         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                             // Someone else won the retry race.
                             if let Some(pid) = live_owner(&path) {
-                                return Self::already_held(pid);
+                                return Err(Self::already_held(pid));
                             }
                         }
                         Err(error) => return Err(LidError::io("write", &path, error)),
                     }
                 } else if let Some(pid) = live_owner(&path) {
-                    return Self::already_held(pid);
+                    return Err(Self::already_held(pid));
                 }
                 // Lock file exists but names no live owner (e.g. garbage that
                 // `live_owner` left behind): overwrite it — we are the owner.
@@ -109,15 +108,25 @@ impl HoldLock {
         }
     }
 
-    fn already_held(pid: u32) -> Result<Self> {
-        Err(LidError::denied(
+    fn already_held(pid: u32) -> LidError {
+        LidError::denied(
             "start a hold",
             format!("another Close My Lid process (pid {pid}) is already holding"),
         )
         .with_hint(
             "Stop the existing hold first with `close-my-lid disable`, or \
              press Ctrl-C in the terminal running it.",
-        ))
+        )
+    }
+
+    /// Fails when another live process currently owns the hold, for callers
+    /// that apply a hold and exit (macOS `enable`) rather than holding the
+    /// lock for the session's lifetime.
+    pub fn check_available() -> Result<()> {
+        match Self::owner() {
+            Some(pid) if pid != std::process::id() => Err(Self::already_held(pid)),
+            _ => Ok(()),
+        }
     }
 
     /// The pid of the live process currently holding, if any.
@@ -136,29 +145,11 @@ impl HoldLock {
             return None;
         }
 
-        let mut system = System::new();
-        let target = Pid::from_u32(pid);
-        system.refresh_processes_specifics(
-            ProcessesToUpdate::Some(&[target]),
-            true,
-            ProcessRefreshKind::nothing(),
-        );
-
-        let process = system.process(target)?;
-        // Term, not Kill: the owner must run its release path on the way out.
-        // NOTE: sysinfo supports only `Kill` on Windows (taskkill /F), so a
-        // graceful Term is Unix-only. On Windows the caller falls back to
-        // restoring via the recovery record after the wait.
-        #[cfg(not(target_os = "windows"))]
-        let signal = Signal::Term;
-        #[cfg(target_os = "windows")]
-        let signal = Signal::Kill;
-        match process.kill_with(signal) {
-            Some(true) => Some(pid),
-            _ => {
-                warn!(pid, "could not signal the process holding the lid");
-                None
-            }
+        if terminate(pid) {
+            Some(pid)
+        } else {
+            warn!(pid, "could not signal the process holding the lid");
+            None
         }
     }
 
@@ -184,7 +175,7 @@ fn lock_path() -> Result<PathBuf> {
 /// Binary names that may legitimately own the hold, used to detect pid reuse.
 /// Without this, an unrelated process that recycled a dead owner's pid would
 /// block new holds until that pid exits.
-const OWNER_BINARIES: [&str; 2] = ["close-my-lid", "close-my-lid-gui"];
+const OWNER_BINARIES: [&str; 3] = ["close-my-lid", "close-my-lid-gui", "closemylid"];
 
 /// The pid in the lock file, but only if that process is still running.
 ///
@@ -198,51 +189,100 @@ fn live_owner(path: &PathBuf) -> Option<u32> {
         return Some(pid);
     }
 
-    let mut system = System::new();
-    let target = Pid::from_u32(pid);
-    system.refresh_processes_specifics(
-        ProcessesToUpdate::Some(&[target]),
-        true,
-        ProcessRefreshKind::nothing().with_exe(UpdateKind::Always),
-    );
-
-    let Some(process) = system.process(target) else {
+    let Some((name, exe)) = describe_process(pid) else {
         debug!(pid, "clearing a stale hold lock");
         let _ = fs::remove_file(path);
         return None;
     };
-    if !looks_like_owner(process) {
-        debug!(
-            pid,
-            name = %process.name().to_string_lossy(),
-            "lock names a recycled pid; clearing it"
-        );
+    if !looks_like_owner(&name, exe.as_deref()) {
+        debug!(pid, %name, "lock names a recycled pid; clearing it");
         let _ = fs::remove_file(path);
         return None;
     }
     Some(pid)
 }
 
-/// True when the process plausibly is a Close My Lid holder: name or exe
-/// stem matches our binaries. A recycled pid running e.g. a browser fails
-/// this and the stale lock is cleared instead of blocking holds.
-fn looks_like_owner(process: &sysinfo::Process) -> bool {
-    let name = process.name().to_string_lossy().to_lowercase();
-    // Windows reports `close-my-lid.exe`; compare the bare stem.
-    let stem = name.strip_suffix(".exe").unwrap_or(&name).to_lowercase();
-    if OWNER_BINARIES.contains(&stem.as_str()) {
+/// Asks one process to exit. Term, not Kill: the owner must run its release
+/// path on the way out.
+///
+/// NOTE: `sysinfo` supports only `Kill` on Windows (`taskkill /F`), so the
+/// graceful signal is Unix-only. On Windows the caller falls back to restoring
+/// via the recovery record after the wait.
+fn terminate(pid: u32) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        // SAFETY: `kill` takes a pid and a signal number and reports failure
+        // through its return value; nothing is dereferenced.
+        unsafe { libc::kill(pid as i32, libc::SIGTERM) == 0 }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System};
+
+        let mut system = System::new();
+        let target = Pid::from_u32(pid);
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[target]),
+            true,
+            ProcessRefreshKind::nothing(),
+        );
+        let Some(process) = system.process(target) else {
+            return false;
+        };
+        #[cfg(not(target_os = "windows"))]
+        let signal = Signal::Term;
+        #[cfg(target_os = "windows")]
+        let signal = Signal::Kill;
+        process.kill_with(signal) == Some(true)
+    }
+}
+
+/// The process's name and executable path, or `None` when it is gone.
+///
+/// macOS asks `libproc` about the one pid; elsewhere `sysinfo` refreshes a
+/// single-process view, which is the narrowest request that API accepts.
+fn describe_process(pid: u32) -> Option<(String, Option<std::path::PathBuf>)> {
+    #[cfg(target_os = "macos")]
+    {
+        crate::agents::describe_process(pid)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+
+        let mut system = System::new();
+        let target = Pid::from_u32(pid);
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[target]),
+            true,
+            ProcessRefreshKind::nothing().with_exe(UpdateKind::Always),
+        );
+        let process = system.process(target)?;
+        Some((
+            process.name().to_string_lossy().into_owned(),
+            process.exe().map(std::path::Path::to_path_buf),
+        ))
+    }
+}
+
+/// True when the process plausibly is a Close My Lid holder: its name or exe
+/// stem matches one of our binaries. A recycled pid running e.g. a browser
+/// fails this and the stale lock is cleared instead of blocking holds.
+fn looks_like_owner(name: &str, exe: Option<&std::path::Path>) -> bool {
+    fn is_ours(candidate: &str) -> bool {
+        // Windows reports `close-my-lid.exe`; compare the bare stem.
+        let lowered = candidate.to_lowercase();
+        let stem = lowered.strip_suffix(".exe").unwrap_or(&lowered);
+        OWNER_BINARIES.contains(&stem)
+    }
+
+    if is_ours(name) {
         return true;
     }
-    if let Some(exe) = process.exe() {
-        let exe_stem = exe
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
-        if OWNER_BINARIES.contains(&exe_stem.as_str()) {
-            return true;
-        }
-    }
-    false
+    exe.and_then(std::path::Path::file_stem)
+        .is_some_and(|stem| is_ours(&stem.to_string_lossy()))
 }
 
 #[cfg(test)]

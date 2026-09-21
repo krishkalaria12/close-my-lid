@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 /// Whether a hold is running, and until when.
 ///
-/// Ported from the Swift `SleepControlState` so all platforms agree on what a
-/// session is and how it is persisted.
+/// Carried over from the Swift app's `SleepControlState`, so all platforms
+/// agree on what a session is and how it is persisted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum SleepControlState {

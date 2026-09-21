@@ -18,7 +18,8 @@ pub const APP_ID: &str = "com.krishkalaria.close-my-lid";
 /// Human-facing app name, used in notifications and CLI output.
 pub const APP_NAME: &str = "Close My Lid";
 
-/// Kept in sync with the root `package.json` and the Swift CLI.
+/// Kept in sync with the root `package.json` and the packaged bundle's
+/// `CFBundleShortVersionString`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Battery percentage at which an unplugged hold is released. Matches the
@@ -53,6 +54,18 @@ pub fn config_dir() -> Result<PathBuf> {
 /// Where the current session is persisted.
 pub fn session_file() -> Result<PathBuf> {
     Ok(config_dir()?.join("session.json"))
+}
+
+/// Where the watchdog heartbeat is persisted (macOS). Written by the app while
+/// a hold is active; read by the `--watchdog` pass.
+pub fn heartbeat_file() -> Result<PathBuf> {
+    Ok(config_dir()?.join("heartbeat.json"))
+}
+
+/// Where the last-picked hold duration is persisted, so the main toggle can
+/// re-apply it.
+pub fn selected_duration_file() -> Result<PathBuf> {
+    Ok(config_dir()?.join("selected-duration"))
 }
 
 #[cfg(test)]

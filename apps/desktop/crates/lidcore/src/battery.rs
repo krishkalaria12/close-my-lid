@@ -2,7 +2,7 @@
 //!
 //! Holding the lid open on a draining battery is how you come back to a dead
 //! laptop, so a hold is dropped at the threshold when unplugged. Ported from
-//! the Swift `BatterySafetyPolicy`.
+//! the Swift app's `BatterySafetyPolicy`.
 
 use starship_battery::{Manager, State};
 use tracing::debug;

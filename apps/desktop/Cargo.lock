@@ -3282,6 +3282,7 @@ version = "0.4.4"
 dependencies = [
  "chrono",
  "directories",
+ "libc",
  "serde",
  "serde_json",
  "starship-battery",

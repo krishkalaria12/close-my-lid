@@ -1,13 +1,14 @@
 //! The hold state machine: what the UI and CLI both drive.
 //!
-//! Ported from the Swift `SleepSessionController`, minus the macOS-only
-//! wake reconciliation. Every state change writes through to the store, so a
-//! restart can tell whether a hold was meant to be running.
+//! Carried over from the Swift app's `SleepSessionController`. Every state
+//! change writes through to the store, so a restart can tell whether a hold
+//! was meant to be running — which is what lets a stranded hold be released
+//! by whatever runs next, app or watchdog.
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use tracing::{debug, info, warn};
 
-use crate::battery::{self, BatterySafetyPolicy};
+use crate::battery::{self, BatterySafetyPolicy, BatteryStatus};
 use crate::duration::SessionDuration;
 use crate::error::Result;
 use crate::lock::HoldLock;
@@ -20,6 +21,11 @@ pub struct SleepSessionController {
     store: SleepSessionStore,
     battery_policy: BatterySafetyPolicy,
     state: SleepControlState,
+    /// Consecutive reconciliations that saw the system reporting no hold while
+    /// the stored session is still active. A single disagreeing reading can be
+    /// a stale view right after a hold was applied; confirmation across two
+    /// polls is required before discarding a session the app believes is live.
+    external_disable_observations: u8,
 }
 
 impl SleepSessionController {
@@ -35,6 +41,7 @@ impl SleepSessionController {
             store,
             battery_policy: BatterySafetyPolicy::default(),
             state,
+            external_disable_observations: 0,
         }
     }
 
@@ -120,6 +127,94 @@ impl SleepSessionController {
         }
 
         Ok(false)
+    }
+
+    /// Releases a timed hold whose end has passed. Returns true when a hold was
+    /// released. Carried over from the Swift app's `stopIfExpired`, used by the macOS
+    /// reconciliation pass.
+    pub fn stop_if_expired(&mut self, now: DateTime<Utc>) -> Result<bool> {
+        if !self.state.has_expired(now) {
+            return Ok(false);
+        }
+        self.stop()?;
+        Ok(true)
+    }
+
+    /// Reconciles the stored session against the OS-reported hold, for
+    /// backends whose setting persists outside the process (macOS `pmset`).
+    ///
+    /// Carried over from the Swift app's `syncWithSystem`, including the two-strike rule:
+    /// a hold the app believes is live is only discarded after two consecutive
+    /// polls disagree, so a stale read right after applying cannot strand a
+    /// session the user just started.
+    pub fn sync_with_system(&mut self, held: bool, now: DateTime<Utc>) -> Result<()> {
+        if self.state.has_expired(now) {
+            self.stop()?;
+            return Ok(());
+        }
+
+        match (self.state.is_active(), held) {
+            (false, true) => {
+                self.external_disable_observations = 0;
+                self.state = SleepControlState::Active {
+                    started_at: now,
+                    ends_at: None,
+                };
+                self.store.save(&self.state)?;
+            }
+            (true, false) => {
+                self.external_disable_observations += 1;
+                if self.external_disable_observations >= 2 {
+                    self.external_disable_observations = 0;
+                    self.clear_stored_session()?;
+                }
+            }
+            (true, true) | (false, false) => {
+                self.external_disable_observations = 0;
+            }
+        }
+        Ok(())
+    }
+
+    /// Reasserts a saved hold after macOS wakes. Power settings can be reset
+    /// during a sleep/wake cycle even though the user's session is still
+    /// active. Carried over from the Swift app's `restoreAfterWake`.
+    pub fn restore_after_wake(&mut self, held: bool, now: DateTime<Utc>) -> Result<()> {
+        if !self.state.is_active() {
+            return Ok(());
+        }
+
+        if self.state.has_expired(now) {
+            self.stop()?;
+            return Ok(());
+        }
+
+        if !held {
+            self.power.acquire()?;
+        }
+        Ok(())
+    }
+
+    /// Releases an active hold when the battery has drained to an unsafe level
+    /// on battery power. Returns `true` when the hold was released. Ported
+    /// from the Swift app's `stopIfBatteryLow`.
+    pub fn stop_if_battery_low(&mut self, status: BatteryStatus) -> Result<bool> {
+        if !self.state.is_active() {
+            return Ok(false);
+        }
+        if !self.battery_policy.should_release(status) {
+            return Ok(false);
+        }
+        self.stop()?;
+        Ok(true)
+    }
+
+    /// Forgets the stored session without touching the OS. Used when
+    /// reconciliation concludes the system hold went away on its own.
+    pub fn clear_stored_session(&mut self) -> Result<()> {
+        self.state = SleepControlState::Inactive;
+        self.store.save(&self.state)?;
+        Ok(())
     }
 
     /// Reconciles saved state against the OS at launch.
@@ -249,7 +344,6 @@ mod tests {
         assert!(!controller.tick().unwrap());
         assert!(controller.state().is_active());
     }
-
     #[test]
     fn launch_reconciliation_releases_a_stranded_hold() {
         let store = SleepSessionStore::at(std::env::temp_dir().join("cml-test-stranded.json"));
@@ -263,5 +357,134 @@ mod tests {
 
         controller.reconcile_at_launch().unwrap();
         assert!(!controller.power.is_held().unwrap());
+    }
+
+    #[test]
+    fn stop_if_expired_releases_only_elapsed_sessions() {
+        use chrono::Duration;
+        let mut controller = controller("cml-test-expiry.json");
+        controller.start(SessionDuration::ONE_HOUR).unwrap();
+        assert!(!controller.stop_if_expired(Utc::now()).unwrap());
+        assert!(controller.state().is_active());
+
+        let past_end = Utc::now() + Duration::hours(2);
+        assert!(controller.stop_if_expired(past_end).unwrap());
+        assert!(!controller.state().is_active());
+
+        // Inactive sessions are a no-op, not an error.
+        assert!(!controller.stop_if_expired(past_end).unwrap());
+    }
+
+    #[test]
+    fn adopting_an_external_hold_records_an_untimed_session() {
+        let mut controller = controller("cml-test-adopt.json");
+        controller.sync_with_system(true, Utc::now()).unwrap();
+        assert!(controller.state().is_active());
+        assert_eq!(controller.state().ends_at(), None);
+    }
+
+    #[test]
+    fn a_single_missing_hold_read_does_not_clear_the_session() {
+        let now = Utc::now();
+        let mut controller = controller("cml-test-strike1.json");
+        controller.start(SessionDuration::ONE_HOUR).unwrap();
+
+        controller.sync_with_system(false, now).unwrap();
+        assert!(
+            controller.state().is_active(),
+            "one stale read must not discard a live session"
+        );
+
+        controller.sync_with_system(false, now).unwrap();
+        assert!(
+            !controller.state().is_active(),
+            "two consecutive misses confirm the hold is gone"
+        );
+    }
+
+    #[test]
+    fn an_agreeing_read_resets_the_strike_count() {
+        let now = Utc::now();
+        let mut controller = controller("cml-test-strikereset.json");
+        controller.start(SessionDuration::ONE_HOUR).unwrap();
+
+        controller.sync_with_system(false, now).unwrap();
+        controller.sync_with_system(true, now).unwrap();
+        controller.sync_with_system(false, now).unwrap();
+        assert!(
+            controller.state().is_active(),
+            "the intervening agreement must reset the count"
+        );
+    }
+
+    #[test]
+    fn restore_after_wake_reapplies_a_missing_hold() {
+        let mut controller = controller("cml-test-wake.json");
+        controller.start(SessionDuration::ONE_HOUR).unwrap();
+        // Simulate the wake reset: the OS no longer holds.
+        controller.power.release().unwrap();
+
+        controller.restore_after_wake(false, Utc::now()).unwrap();
+        assert!(controller.power.is_held().unwrap());
+        assert!(controller.state().is_active());
+    }
+
+    #[test]
+    fn restore_after_wake_ends_an_expired_session() {
+        use chrono::Duration;
+        let mut controller = controller("cml-test-wake-expired.json");
+        controller.start(SessionDuration::ONE_HOUR).unwrap();
+
+        controller
+            .restore_after_wake(true, Utc::now() + Duration::hours(2))
+            .unwrap();
+        assert!(!controller.state().is_active());
+    }
+
+    #[test]
+    fn battery_safety_releases_only_unsafe_holds() {
+        use crate::battery::BatteryStatus;
+        let mut controller = controller("cml-test-battery.json");
+
+        // Inactive sessions are untouched.
+        assert!(
+            !controller
+                .stop_if_battery_low(BatteryStatus {
+                    percentage: 1,
+                    is_charging: false
+                })
+                .unwrap()
+        );
+
+        controller.start(SessionDuration::ONE_HOUR).unwrap();
+        // Healthy or charging batteries keep the hold.
+        assert!(
+            !controller
+                .stop_if_battery_low(BatteryStatus {
+                    percentage: 80,
+                    is_charging: false
+                })
+                .unwrap()
+        );
+        assert!(
+            !controller
+                .stop_if_battery_low(BatteryStatus {
+                    percentage: 1,
+                    is_charging: true
+                })
+                .unwrap()
+        );
+        assert!(controller.state().is_active());
+
+        // Drained and unplugged releases it.
+        assert!(
+            controller
+                .stop_if_battery_low(BatteryStatus {
+                    percentage: 5,
+                    is_charging: false
+                })
+                .unwrap()
+        );
+        assert!(!controller.state().is_active());
     }
 }

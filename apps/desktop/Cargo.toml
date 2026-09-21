@@ -25,6 +25,10 @@ starship-battery = "0.11.1"
 clap = { version = "4.6.7", features = ["derive"] }
 ctrlc = "3.5.2"
 
+# macOS: `lidcore` takes its process snapshot through libproc and sysctl
+# rather than sysinfo, which needs the raw bindings.
+libc = "0.2.189"
+
 # Linux: logind inhibitor over the system bus.
 zbus = "5.19.0"
 

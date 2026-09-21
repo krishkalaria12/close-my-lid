@@ -38,6 +38,12 @@ pub enum LidError {
         hint: Option<String>,
     },
 
+    /// The administrator prompt was dismissed. Distinct from [`LidError::Denied`]:
+    /// nothing is wrong with permissions, the user just said no this time.
+    /// macOS raises this when the `osascript` elevation dialog is cancelled.
+    #[error("administrator approval was cancelled")]
+    ElevationCancelled,
+
     /// The system D-Bus could not be reached at all (Linux).
     #[error("could not reach the system bus: {detail}")]
     Bus { detail: String },
@@ -117,9 +123,12 @@ impl LidError {
     pub fn hint(&self) -> Option<&str> {
         match self {
             Self::Denied { hint, .. } | Self::Backend { hint, .. } => hint.as_deref(),
-            Self::UnsupportedPlatform { .. } => Some(
-                "On macOS use the Close My Lid menu bar app in /Applications, \
-                 which handles this natively.",
+            Self::UnsupportedPlatform { .. } => {
+                Some("Close My Lid does not support lid control on this platform yet.")
+            }
+            Self::ElevationCancelled => Some(
+                "Close My Lid needs one-time administrator approval to keep the \
+                 machine awake with the lid closed. Try again and approve when asked.",
             ),
             Self::Bus { .. } => Some(
                 "Close My Lid needs systemd-logind on the system bus. Check that \
@@ -160,8 +169,13 @@ mod tests {
 
     #[test]
     fn platform_errors_carry_a_default_hint() {
-        let error = LidError::UnsupportedPlatform { os: "macos" };
-        assert!(error.hint().unwrap().contains("menu bar app"));
+        let error = LidError::UnsupportedPlatform { os: "plan9" };
+        assert!(
+            error
+                .hint()
+                .unwrap()
+                .contains("does not support lid control")
+        );
     }
 
     #[test]
@@ -180,5 +194,13 @@ mod tests {
     fn only_bus_failures_are_transient() {
         assert!(LidError::bus("no socket").is_transient());
         assert!(!LidError::denied("hold", "no").is_transient());
+        assert!(!LidError::ElevationCancelled.is_transient());
+    }
+
+    #[test]
+    fn a_cancelled_elevation_names_approval() {
+        let error = LidError::ElevationCancelled;
+        assert!(error.to_string().contains("approval"), "{error}");
+        assert!(error.hint().unwrap().contains("administrator"));
     }
 }

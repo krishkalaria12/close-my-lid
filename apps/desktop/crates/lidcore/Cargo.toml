@@ -15,6 +15,9 @@ chrono.workspace = true
 directories.workspace = true
 tracing.workspace = true
 starship-battery.workspace = true
+
+# macOS takes its own snapshot through libproc; see `agents::darwin`.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
 sysinfo.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -29,3 +32,8 @@ windows = { workspace = true, features = [
     "Win32_System_Power",
     "Win32_System_Registry",
 ] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# The process scan and the notification plan both go through libproc/sysctl
+# directly; see `agents::darwin` for why `sysinfo` is not used there.
+libc.workspace = true

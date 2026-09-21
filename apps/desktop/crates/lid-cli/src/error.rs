@@ -16,6 +16,9 @@ pub enum CliError {
     #[error(transparent)]
     Lid(#[from] LidError),
 
+    /// Ctrl-C handling only exists for the blocking `enable` on Linux and
+    /// Windows; macOS `enable` applies the persistent setting and exits.
+    #[cfg(not(target_os = "macos"))]
     #[error("could not listen for Ctrl-C")]
     SignalHandler(#[source] ctrlc::Error),
 
@@ -28,6 +31,7 @@ impl CliError {
     pub fn hint(&self) -> Option<&str> {
         match self {
             Self::Lid(error) => error.hint(),
+            #[cfg(not(target_os = "macos"))]
             Self::SignalHandler(_) => Some(
                 "Another handler may already be installed. Try running the command \
                  directly rather than under a wrapper.",

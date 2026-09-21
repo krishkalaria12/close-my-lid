@@ -10,10 +10,13 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use chrono::Utc;
-use lidcore::{AgentHarness, SessionDuration, SleepControlState};
+#[cfg(not(target_os = "macos"))]
+use lidcore::SessionDuration;
+use lidcore::{AgentHarness, SleepControlState};
 
 use crate::error::{CliError, Result};
 
+#[cfg(target_os = "linux")]
 const SYSTEMD_UNIT: &str = r#"# Save to ~/.config/systemd/user/close-my-lid.service
 # Then: systemctl --user daemon-reload && systemctl --user start close-my-lid
 #
@@ -44,11 +47,13 @@ pub fn line(text: &str) -> Result<()> {
     writeln!(std::io::stdout(), "{text}").map_err(CliError::Output)
 }
 
+#[cfg(target_os = "linux")]
 pub fn systemd_unit() -> Result<()> {
     print!("{SYSTEMD_UNIT}");
     std::io::stdout().flush().map_err(CliError::Output)
 }
 
+#[cfg(not(target_os = "macos"))]
 pub fn hold_started(duration: SessionDuration, backend: &str) -> Result<()> {
     line(&format!(
         "{} is holding the lid open ({}).",
@@ -59,14 +64,17 @@ pub fn hold_started(duration: SessionDuration, backend: &str) -> Result<()> {
     line("Press Ctrl-C to release.")
 }
 
+#[cfg(not(target_os = "macos"))]
 pub fn asked_owner_to_stop(pid: u32) -> Result<()> {
     line(&format!("Asking the holding process (pid {pid}) to stop…"))
 }
 
+#[cfg(not(target_os = "macos"))]
 pub fn hold_expired() -> Result<()> {
     line("\nSession ended; normal sleep restored.")
 }
 
+#[cfg(not(target_os = "macos"))]
 pub fn hold_released() -> Result<()> {
     line("\nReleased. Normal sleep restored.")
 }
