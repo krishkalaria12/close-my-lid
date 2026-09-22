@@ -106,6 +106,30 @@ impl AgentHarness {
         }
     }
 
+    /// Install-directory fragments identifying a native binary whose file is
+    /// not named after the harness. Claude Code's native installer keeps each
+    /// release at `versions/<version>` behind a `claude` symlink, and the
+    /// kernel names a process after the file it actually executes, so the
+    /// session reports itself as `2.1.280` rather than `claude`. The directory
+    /// is `$XDG_DATA_HOME/claude/versions`, defaulting to `~/.local/share`, so
+    /// only the part below the data directory is fixed.
+    fn install_path_markers(&self) -> &'static [&'static str] {
+        match self {
+            Self::ClaudeCode => &["/claude/versions/"],
+            _ => &[],
+        }
+    }
+
+    fn matching_install_path(path: &str) -> Option<Self> {
+        let normalised = normalise_separators(path);
+        Self::ALL.into_iter().find(|harness| {
+            harness
+                .install_path_markers()
+                .iter()
+                .any(|marker| normalised.contains(marker))
+        })
+    }
+
     fn matching_executable(name: &str) -> Option<Self> {
         let stem = executable_stem(name);
         Self::ALL.into_iter().find(|harness| {
@@ -178,12 +202,22 @@ pub struct RunningProcess {
     pub pid: u32,
     pub parent_pid: Option<u32>,
     pub executable_name: String,
+    /// Resolved path of the running binary, when the platform can report it.
+    pub executable_path: Option<String>,
     pub arguments: Vec<String>,
 }
 
 impl RunningProcess {
     fn harness(&self) -> Option<AgentHarness> {
         if let Some(harness) = AgentHarness::matching_executable(&self.executable_name) {
+            return Some(harness);
+        }
+
+        if let Some(harness) = self
+            .executable_path
+            .as_deref()
+            .and_then(AgentHarness::matching_install_path)
+        {
             return Some(harness);
         }
 
@@ -303,6 +337,7 @@ fn sysinfo_snapshot() -> Vec<RunningProcess> {
             pid: pid.as_u32(),
             parent_pid: process.parent().map(|parent| parent.as_u32()),
             executable_name: process.name().to_string_lossy().to_string(),
+            executable_path: process.exe().map(|path| path.to_string_lossy().to_string()),
             arguments: process
                 .cmd()
                 .iter()
@@ -321,8 +356,32 @@ mod tests {
             pid,
             parent_pid: Some(parent),
             executable_name: name.to_string(),
+            executable_path: None,
             arguments: args.iter().map(|arg| arg.to_string()).collect(),
         }
+    }
+
+    #[test]
+    fn recognises_a_native_install_named_after_its_version() {
+        let mut claude = process(12, 1, "2.1.280", &[]);
+        claude.executable_path = Some("/Users/k/.local/share/claude/versions/2.1.280".to_string());
+        let counts = session_counts(&[claude]);
+        assert_eq!(counts.get(&AgentHarness::ClaudeCode), Some(&1));
+
+        // XDG_DATA_HOME moves the versions directory, and Windows uses its
+        // own separators; both are still the native install.
+        let mut relocated = process(14, 1, "2.1.280", &[]);
+        relocated.executable_path = Some("/data/k/claude/versions/2.1.280".to_string());
+        let mut windows = process(15, 1, "2.1.280.exe", &[]);
+        windows.executable_path =
+            Some(r"C:\Users\k\.local\share\claude\versions\2.1.280.exe".to_string());
+        let counts = session_counts(&[relocated, windows]);
+        assert_eq!(counts.get(&AgentHarness::ClaudeCode), Some(&2));
+
+        // A version-named binary anywhere else is not a session.
+        let mut other = process(13, 1, "2.1.280", &[]);
+        other.executable_path = Some("/opt/tool/versions/2.1.280".to_string());
+        assert!(session_counts(&[other]).is_empty());
     }
 
     #[test]

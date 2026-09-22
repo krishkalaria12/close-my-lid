@@ -14,6 +14,11 @@
 //!   on a busy laptop is several hundred copies for the handful of `node`
 //!   processes that actually need one.
 //!
+//! Executable paths, by contrast, are read for every process: a native
+//! install can be named after its version rather than its harness, and
+//! `proc_pidpath` is a single small copy — about a millisecond for a whole
+//! scan.
+//!
 //! The panel re-scans every 5 seconds while it is open, so this is the hot
 //! path of the whole app.
 
@@ -39,6 +44,7 @@ pub fn snapshot() -> Vec<RunningProcess> {
     // Allocated lazily on the first JavaScript runtime seen, then reused, so a
     // scan with no such process allocates no argument buffer at all.
     let mut argument_buffer: Vec<u8> = Vec::new();
+    let mut path_buffer = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
 
     for pid in pids {
         let Some(info) = bsd_info(pid) else {
@@ -62,6 +68,8 @@ pub fn snapshot() -> Vec<RunningProcess> {
             pid: info.pbi_pid,
             parent_pid: Some(info.pbi_ppid),
             executable_name,
+            executable_path: executable_path_into(pid, &mut path_buffer)
+                .map(std::borrow::Cow::into_owned),
             arguments,
         });
     }
@@ -248,6 +256,12 @@ pub(crate) fn describe(pid: u32) -> Option<(String, Option<PathBuf>)> {
 
 fn executable_path(pid: i32) -> Option<PathBuf> {
     let mut buffer = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    executable_path_into(pid, &mut buffer).map(|path| PathBuf::from(path.into_owned()))
+}
+
+/// Reads `pid`'s executable path into a caller-owned buffer, so a scan
+/// allocates one buffer rather than one per process.
+fn executable_path_into(pid: i32, buffer: &mut [u8]) -> Option<std::borrow::Cow<'_, str>> {
     // SAFETY: the buffer and its length are passed together.
     let written = unsafe {
         libc::proc_pidpath(
@@ -259,8 +273,7 @@ fn executable_path(pid: i32) -> Option<PathBuf> {
     if written <= 0 {
         return None;
     }
-    buffer.truncate(written as usize);
-    Some(PathBuf::from(String::from_utf8_lossy(&buffer).into_owned()))
+    Some(String::from_utf8_lossy(&buffer[..written as usize]))
 }
 
 #[cfg(test)]
