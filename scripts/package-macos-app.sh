@@ -33,7 +33,20 @@ if [[ -z "$VERSION" ]]; then
   exit 1
 fi
 
-BUILD_VERSION="${BUILD_VERSION:-8}"
+# CFBundleVersion has to increase with every release, and this was pinned at a
+# literal 8 — so 0.4.4, 0.4.5 and everything after all claimed the same build.
+# LaunchServices compares this field when it finds two copies of a bundle and
+# decides which one to keep, so a frozen number lets a stale copy win.
+#
+# Derived from the version instead: `0.4.4` becomes `4004`, which rises
+# monotonically for any component under a thousand and needs no second thing to
+# remember to bump. An explicit BUILD_VERSION still overrides it.
+build_version_from() {
+  IFS=. read -r major minor patch <<<"$1"
+  printf '%d\n' "$(( ${major:-0} * 1000000 + ${minor:-0} * 1000 + ${patch:-0} ))"
+}
+
+BUILD_VERSION="${BUILD_VERSION:-$(build_version_from "${VERSION%%-*}")}"
 APP_NAME="Close My Lid"
 EXECUTABLE_NAME="CloseMyLid"
 BUNDLE_ID="app.closemylid.CloseMyLid"

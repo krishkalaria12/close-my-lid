@@ -24,7 +24,7 @@ What does still matter is *where* an item points. The app refuses to open an enc
 
 ## Publish an update
 
-1. Increase the `version` under `[workspace.package]` in `apps/desktop/Cargo.toml`, and the monotonically increasing integer `BUILD_VERSION`. The packaging script reads the version from that manifest — the same place the binary gets its own `--version` and the one it compares against this feed — and refuses to package a bundle whose `Info.plist` and executable disagree. Set `VERSION` in the environment only to override it deliberately.
+1. Increase the `version` under `[workspace.package]` in `apps/desktop/Cargo.toml`. The packaging script reads the version from that manifest — the same place the binary gets its own `--version` and the one it compares against this feed — and refuses to package a bundle whose `Info.plist` and executable disagree. `CFBundleVersion` is derived from it (`0.4.4` → `4004`), so there is no second number to remember. Set `VERSION` or `BUILD_VERSION` in the environment only to override either deliberately.
 2. Build with a Developer ID identity. Ad-hoc signing is only for local validation. The packaging script produces a universal binary when both Apple targets are installed:
 
 ```bash
@@ -32,8 +32,7 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin
 ```
 
 ```bash
-VERSION=<version> BUILD_VERSION=<integer> \
-  CODE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+CODE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
   ./scripts/package-macos-app.sh
 codesign --verify --deep --strict --verbose=2 "dist/macos/Close My Lid.app"
 ```
