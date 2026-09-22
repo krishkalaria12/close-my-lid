@@ -1,0 +1,260 @@
+name: release
+
+# Builds the shipped artifact for each operating system on that operating
+# system's own runner and attaches it to the tag's GitHub Release.
+#
+# Nothing here is cross-compiled. The Windows tray app links against the
+# Windows SDK through gpui, the Linux CLI links against the host's glibc, and
+# the macOS bundle needs `lipo`, `codesign` and the AppKit SDK — so a release
+# cut from one developer machine could only ever ship one third of the product.
+#
+# The release is created as a *draft*. Publishing it is the deliberate step
+# that fans out: `update-homebrew-tap.yml` opens and auto-merges the tap
+# update, and `release-notes.yml` validates the published body. Assets are
+# uploaded before any of that can run.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build (for example, v1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# Two runs for one tag would race on `gh release upload`.
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # The tag and the workspace manifest have to agree: the binary takes its
+      # own version from the manifest and compares it against the update feed,
+      # so a tag that says otherwise ships an app that reports the wrong
+      # version and a cask whose URL points at an asset name nobody built.
+      - name: Resolve and verify the version
+        id: resolve
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="$RELEASE_TAG"
+          case "$tag" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "release tag must look like v1.2.3, got '$tag'" >&2; exit 1 ;;
+          esac
+          version="${tag#v}"
+          manifest_version="$(awk '
+            /^\[workspace\.package\]/ { in_section = 1; next }
+            /^\[/                     { in_section = 0 }
+            in_section && /^version[[:space:]]*=/ {
+              gsub(/[^0-9A-Za-z.+-]/, "", $3); print $3; exit
+            }' apps/desktop/Cargo.toml)"
+          if [ "$version" != "$manifest_version" ]; then
+            echo "tag $tag does not match apps/desktop/Cargo.toml version $manifest_version" >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      # Created here rather than in each build job, because three jobs racing
+      # to create the same release would leave two of them uploading to a
+      # release that does not exist yet. The template body is a floor, not the
+      # final notes: it already carries the install and migration blocks that
+      # `scripts/validate-release-instructions.rb` requires of a published
+      # release, so an unedited draft still passes `release-notes.yml`.
+      - name: Create the draft release if it does not exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "release $RELEASE_TAG already exists; uploading into it"
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" \
+            --draft \
+            --title "Close My Lid ${RELEASE_TAG}" \
+            --notes-file docs/release-notes-template.md
+
+  macos:
+    needs: prepare
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop
+
+      # Added from inside the workspace: `apps/desktop/rust-toolchain.toml`
+      # pins the toolchain, and from the repository root rustup would add the
+      # targets to the default one instead — see the same note in `ci.yml`.
+      - name: Install the Apple targets
+        working-directory: apps/desktop
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Package the menu bar app
+        env:
+          UNIVERSAL: "1"
+        run: ./scripts/package-macos-app.sh
+
+      - name: Verify the bundle
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          app="dist/macos/Close My Lid.app"
+          plutil -lint "$app/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$app/Contents/Info.plist")" = "true"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$VERSION"
+          lipo -archs "$app/Contents/MacOS/CloseMyLid" | grep -F 'arm64'
+          lipo -archs "$app/Contents/MacOS/CloseMyLid" | grep -F 'x86_64'
+          test ! -d "$app/Contents/Frameworks"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+      # `ditto`, not `zip`: it is the archiver that preserves the bundle's
+      # symlinks and extended attributes, and the only one whose output the
+      # cask's checksum is taken over.
+      - name: Archive the app
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          ditto -c -k --keepParent "dist/macos/Close My Lid.app" \
+            "Close-My-Lid-v${VERSION}-macOS.zip"
+          shasum -a 256 "Close-My-Lid-v${VERSION}-macOS.zip"
+          stat -f%z "Close-My-Lid-v${VERSION}-macOS.zip"
+
+      - name: Upload the macOS archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "Close-My-Lid-v${VERSION}-macOS.zip" --clobber
+
+  linux:
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop
+
+      - name: Build the CLI
+        working-directory: apps/desktop
+        run: cargo build --release -p lid-cli
+
+      # `enable` and `disable` take a logind inhibitor and are not exercised
+      # here; these two need no session bus and no privileges.
+      - name: Smoke test the CLI
+        working-directory: apps/desktop
+        run: |
+          ./target/release/close-my-lid --version
+          ./target/release/close-my-lid agents --json
+
+      - name: Archive the CLI
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          name="close-my-lid-v${VERSION}-linux-x86_64"
+          mkdir -p "stage/${name}"
+          install -m 755 apps/desktop/target/release/close-my-lid "stage/${name}/close-my-lid"
+          install -m 644 LICENSE "stage/${name}/LICENSE"
+          install -m 644 apps/desktop/README.md "stage/${name}/README.md"
+          tar -czf "${name}.tar.gz" -C stage "${name}"
+          sha256sum "${name}.tar.gz"
+
+      - name: Upload the Linux archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "close-my-lid-v${VERSION}-linux-x86_64.tar.gz" --clobber
+
+  windows:
+    needs: prepare
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop
+
+      # Both surfaces ship on Windows: the tray app is the product, the CLI is
+      # what scripts and scheduled tasks drive.
+      - name: Build the CLI and the tray app
+        working-directory: apps/desktop
+        run: cargo build --release -p lid-cli -p lid-gui
+
+      - name: Smoke test the CLI
+        working-directory: apps/desktop
+        run: |
+          ./target/release/close-my-lid.exe --version
+          ./target/release/close-my-lid.exe agents --json
+
+      - name: Archive the Windows binaries
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          name="Close-My-Lid-v${VERSION}-windows-x86_64"
+          mkdir -p "stage/${name}"
+          cp apps/desktop/target/release/close-my-lid.exe "stage/${name}/"
+          cp apps/desktop/target/release/close-my-lid-gui.exe "stage/${name}/"
+          cp LICENSE "stage/${name}/LICENSE"
+          cp apps/desktop/README.md "stage/${name}/README.md"
+          powershell -Command "Compress-Archive -Path 'stage/${name}' -DestinationPath '${name}.zip' -Force"
+          sha256sum "${name}.zip"
+
+      - name: Upload the Windows archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "Close-My-Lid-v${VERSION}-windows-x86_64.zip" --clobber
