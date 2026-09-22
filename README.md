@@ -101,7 +101,7 @@ change that:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `CLOSE_MY_LID_VERSION` | latest | Release to install, e.g. `v0.5.0` |
+| `CLOSE_MY_LID_VERSION` | latest | Release to install, e.g. `v0.5.1` |
 | `CLOSE_MY_LID_BIN_DIR` | `~/.local/bin` | macOS/Linux: where `close-my-lid` goes |
 | `CLOSE_MY_LID_APP_DIR` | `/Applications` | macOS: where the app goes |
 | `CLOSE_MY_LID_INSTALL_DIR` | `%LOCALAPPDATA%\Programs\CloseMyLid` | Windows: install folder |
@@ -109,7 +109,7 @@ change that:
 For example:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | CLOSE_MY_LID_VERSION=v0.5.0 sh
+curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | CLOSE_MY_LID_VERSION=v0.5.1 sh
 ```
 
 Re-running a script upgrades in place.

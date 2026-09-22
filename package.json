@@ -1,7 +1,7 @@
 {
   "name": "close-my-lid-monorepo",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Close My Lid monorepo: native menu bar app for macOS, CLI and tray app for Linux and Windows, Raycast extension, and marketing site.",
   "license": "MIT",
   "packageManager": "pnpm@12.4.1",
