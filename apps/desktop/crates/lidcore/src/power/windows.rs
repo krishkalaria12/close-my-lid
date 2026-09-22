@@ -69,14 +69,17 @@ fn write_recovery(saved: &SavedLidAction) -> Result<()> {
 }
 
 fn write_recovery_at(path: &std::path::Path, saved: &SavedLidAction) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| LidError::io("create", parent, error))?;
-    }
     let encoded = serde_json::to_string_pretty(saved).map_err(|source| LidError::Encode {
         path: path.to_path_buf(),
         source,
     })?;
-    fs::write(path, encoded).map_err(|error| LidError::io("write", path, error))
+    // Atomic, like `session.json`. This is the *only* copy of the user's
+    // original LIDACTION values, and it is written in the moment before those
+    // values are overwritten — exactly when a crash is most expensive. A plain
+    // `fs::write` truncates first, so dying mid-write left a file that
+    // `read_recovery` discards as malformed and a lid action pinned to "do
+    // nothing" with nothing left to restore from.
+    crate::atomic::write(path, &encoded)
 }
 
 fn read_recovery() -> Option<SavedLidAction> {

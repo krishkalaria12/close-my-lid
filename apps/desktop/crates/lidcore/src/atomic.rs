@@ -61,6 +61,18 @@ pub fn write_with_mode(path: &Path, contents: &str, mode: u32) -> Result<()> {
 
     file.persist(path)
         .map_err(|error| LidError::io("write", path, error.error))?;
+
+    // The rename itself is a directory change, and `sync_all` above covered
+    // only the file's own blocks. Without this a power loss between the two
+    // can leave the directory entry still pointing at the *old* inode — which
+    // for `session.json` is a hold recorded as running that no longer is.
+    // Best-effort: a filesystem that refuses to open a directory (or to sync
+    // one) must not turn a successful write into a failure.
+    #[cfg(unix)]
+    if let Ok(directory) = std::fs::File::open(parent) {
+        let _ = directory.sync_all();
+    }
+
     Ok(())
 }
 

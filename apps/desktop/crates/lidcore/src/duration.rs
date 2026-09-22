@@ -13,6 +13,14 @@ pub enum SessionDuration {
     },
 }
 
+/// The longest hold `--for` will accept.
+///
+/// A bound is needed rather than merely rejecting overflow: `chrono` measures a
+/// `Duration` in milliseconds, so a minute count in the quadrillions panics
+/// before it ever reaches a session. A year is far past any real lid hold and
+/// leaves the error message something a user can act on.
+const MAX_MINUTES: i64 = 365 * 24 * 60;
+
 impl SessionDuration {
     pub const THIRTY_MINUTES: Self = Self::Timed { minutes: 30 };
     pub const ONE_HOUR: Self = Self::Timed { minutes: 60 };
@@ -71,9 +79,18 @@ impl SessionDuration {
             return Err("a duration must be greater than zero".to_string());
         }
 
-        Ok(Self::Timed {
-            minutes: parsed * multiplier,
-        })
+        // `parsed * multiplier` used to be a plain multiply. Release builds
+        // have overflow checks off, so `--for 200000000000000000h` wrapped to a
+        // *negative* minute count: the hold was taken and then expired on the
+        // spot, or `chrono::Duration::minutes` panicked on the way there.
+        let minutes = parsed
+            .checked_mul(multiplier)
+            .filter(|minutes| *minutes <= MAX_MINUTES)
+            .ok_or_else(|| {
+                format!("a duration must be no longer than {MAX_MINUTES} minutes (one year)")
+            })?;
+
+        Ok(Self::Timed { minutes })
     }
 }
 
@@ -106,6 +123,19 @@ mod tests {
         assert!(SessionDuration::parse("soon").is_err());
         assert!(SessionDuration::parse("0m").is_err());
         assert!(SessionDuration::parse("-5").is_err());
+    }
+
+    #[test]
+    fn a_duration_too_large_to_hold_is_refused_rather_than_wrapped() {
+        // Release builds have overflow checks off, so the multiply used to wrap
+        // to a negative minute count — a hold that expired the moment it began.
+        for absurd in ["200000000000000000h", "9223372036854775807h", "999999999m"] {
+            let error = SessionDuration::parse(absurd).unwrap_err();
+            assert!(error.contains("no longer than"), "{absurd}: {error}");
+        }
+        // The bound itself is still accepted, and still lands on a real end.
+        let year = SessionDuration::parse(&format!("{MAX_MINUTES}")).unwrap();
+        assert!(year.end_at(Utc::now()).is_some());
     }
 
     #[test]

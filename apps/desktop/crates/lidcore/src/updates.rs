@@ -58,11 +58,29 @@ pub fn latest_release(feed: &str) -> Option<UpdateInfo> {
         .inspect_err(|error| warn!(%error, "could not parse the update feed"))
         .ok()?;
 
-    // The feed is newest-first, so the first item is the one to offer.
-    let item = document
+    // The highest version on the feed, not the first element in the document.
+    // Ordering was assumed rather than checked, so an item appended to the
+    // bottom — or one restored out of order in a merge — published a release
+    // nobody was ever offered.
+    let newest = document
         .descendants()
-        .find(|node| node.has_tag_name("item"))?;
+        .filter(|node| node.has_tag_name("item"))
+        .filter_map(read_item)
+        .max_by(|left, right| parse_version(&left.version).cmp(&parse_version(&right.version)))?;
 
+    // Checked on the winner alone. Falling back to the runner-up when the
+    // newest item's download is not ours would let a tampered feed steer
+    // someone at an older release of its choosing.
+    if !is_release_url(&newest.url) {
+        warn!(url = %newest.url, "the update feed named a download outside the project's releases");
+        return None;
+    }
+
+    Some(newest)
+}
+
+/// One `<item>`'s version and download URL, or `None` if it carries neither.
+fn read_item(item: roxmltree::Node<'_, '_>) -> Option<UpdateInfo> {
     // Matched on local name alone: the version element is namespaced to
     // Sparkle's URI, which the feed is free to bind to any prefix.
     let version = item
@@ -81,11 +99,6 @@ pub fn latest_release(feed: &str) -> Option<UpdateInfo> {
         .and_then(|node| node.attribute("url"))?
         .trim()
         .to_string();
-
-    if !is_release_url(&url) {
-        warn!(%url, "the update feed named a download outside the project's releases");
-        return None;
-    }
 
     Some(UpdateInfo { version, url })
 }
@@ -161,6 +174,17 @@ mod tests {
             "{}",
             info.url
         );
+    }
+
+    #[test]
+    fn the_newest_release_wins_whatever_order_the_feed_lists_it_in() {
+        // The feed's ordering was taken on trust. An item appended below the
+        // others — or reordered by a merge — used to hide the release.
+        let out_of_order = FEED
+            .replace("<title>0.5.0</title>", "<title>PLACEHOLDER</title>")
+            .replace("0.4.4", "0.6.0")
+            .replace("<title>PLACEHOLDER</title>", "<title>0.5.0</title>");
+        assert_eq!(latest_release(&out_of_order).unwrap().version, "0.6.0");
     }
 
     #[test]

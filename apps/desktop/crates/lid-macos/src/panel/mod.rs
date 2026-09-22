@@ -525,20 +525,36 @@ fn anchor_origin(button: &NSStatusBarButton, size: NSSize, mtm: MainThreadMarker
     let in_window = button.convertRect_toView(button.bounds(), None);
     let frame = window.convertRectToScreen(in_window);
 
-    let mut origin = NSPoint::new(
+    let origin = NSPoint::new(
         frame.mid().x - size.width / 2.0,
         frame.min().y - size.height - ANCHOR_GAP,
     );
 
-    if let Some(screen) = window.screen().or_else(|| NSScreen::mainScreen(mtm)) {
-        let visible = screen.visibleFrame();
-        let (min, max) = (visible.min(), visible.max());
-        origin.x = origin
-            .x
-            .clamp(min.x + SCREEN_MARGIN, max.x - size.width - SCREEN_MARGIN);
-        origin.y = origin.y.max(min.y + SCREEN_MARGIN);
+    match window.screen().or_else(|| NSScreen::mainScreen(mtm)) {
+        Some(screen) => clamped_origin(origin, size, screen.visibleFrame()),
+        None => origin,
     }
-    origin
+}
+
+/// Nudges an origin back inside a screen's visible area.
+///
+/// Pure so the arithmetic is testable: the rest of `anchor_origin` needs a
+/// status item and a main thread, and this is the half that can go wrong.
+///
+/// `f64::clamp` used to do the horizontal pin, and it *panics* when the low
+/// bound exceeds the high one — which is what a display narrower than the panel
+/// plus its margins produces. Pinning the left edge instead keeps the panel
+/// reachable on a display too small to hold it, and cannot bring the app down
+/// over a screen geometry the panel was never designed for.
+fn clamped_origin(origin: NSPoint, size: NSSize, visible: NSRect) -> NSPoint {
+    let (min, max) = (visible.min(), visible.max());
+    NSPoint::new(
+        origin
+            .x
+            .min(max.x - size.width - SCREEN_MARGIN)
+            .max(min.x + SCREEN_MARGIN),
+        origin.y.max(min.y + SCREEN_MARGIN),
+    )
 }
 
 #[cfg(test)]
@@ -550,5 +566,49 @@ mod tests {
         assert_eq!(session_detail(0), "idle");
         assert_eq!(session_detail(1), "1 session");
         assert_eq!(session_detail(4), "4 sessions");
+    }
+
+    /// A 1440x900 display with the menu bar taken off the top.
+    fn screen() -> NSRect {
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1440.0, 875.0))
+    }
+
+    fn panel() -> NSSize {
+        NSSize::new(WIDTH, 460.0)
+    }
+
+    #[test]
+    fn an_origin_already_on_screen_is_left_where_it_is() {
+        let origin = NSPoint::new(600.0, 400.0);
+        assert_eq!(clamped_origin(origin, panel(), screen()), origin);
+    }
+
+    #[test]
+    fn a_panel_hanging_off_an_edge_is_pulled_back_inside() {
+        let visible = screen();
+        let size = panel();
+
+        // A status item near the right edge would push the panel off it.
+        let pulled = clamped_origin(NSPoint::new(1400.0, 400.0), size, visible);
+        assert_eq!(pulled.x, visible.max().x - size.width - SCREEN_MARGIN);
+
+        // And one near the left, the other way.
+        let pulled = clamped_origin(NSPoint::new(-50.0, 400.0), size, visible);
+        assert_eq!(pulled.x, visible.min().x + SCREEN_MARGIN);
+
+        // A panel taller than the space below the menu bar sits on the bottom.
+        let pulled = clamped_origin(NSPoint::new(600.0, -200.0), size, visible);
+        assert_eq!(pulled.y, visible.min().y + SCREEN_MARGIN);
+    }
+
+    #[test]
+    fn a_display_narrower_than_the_panel_does_not_bring_the_app_down() {
+        // `f64::clamp` panics when the low bound exceeds the high one, which is
+        // exactly this case. The left edge wins, so the panel stays reachable.
+        let narrow = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(200.0, 400.0));
+        let origin = clamped_origin(NSPoint::new(10.0, 10.0), panel(), narrow);
+        assert_eq!(origin.x, SCREEN_MARGIN, "the left edge stays reachable");
+        // Vertically it already fits, so nothing moves it.
+        assert_eq!(origin.y, 10.0);
     }
 }

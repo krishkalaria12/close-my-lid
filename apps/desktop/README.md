@@ -145,7 +145,7 @@ watchdog supervises it from there.
 | Linux logind backend | type-checks for `x86_64-unknown-linux-gnu`, **needs hardware testing** |
 | Windows power-scheme backend | type-checks for `x86_64-pc-windows-msvc`, **needs hardware testing** |
 | `lid-cli` | done |
-| `lid-gui` panel and tray | scaffolded, **never compiled — see below** |
+| `lid-gui` panel and tray | compiles and lints on Windows in CI, **needs hardware testing** |
 | macOS packaging | done (`scripts/package-macos-app.sh`) |
 | Windows and Linux packaging | not started |
 
@@ -160,10 +160,10 @@ watchdog supervises it from there.
   auto-invert.
 - **Windows 11 hides new tray icons** in the taskbar overflow by default, so
   the app is effectively invisible on first run. Needs an onboarding pass.
-- **`lid-gui` has never been compiled**, for the Metal reason above. The first
-  real build will be on Windows via `ci-desktop.yml`. Expect API fixes on that
-  first build: the code is written against verified 0.5.1 signatures, but
-  nothing has type-checked it.
+- **`lid-gui` cannot be built on macOS**, for the Metal reason above. It is
+  built and linted on Windows by `ci-desktop.yml`, and can be checked from a
+  Mac without pushing — see [Checking the Windows crate from a
+  Mac](#checking-the-windows-crate-from-a-mac).
 
 ## Dependency policy
 
@@ -175,8 +175,8 @@ are taken at a caret range like everything else.
 ## Development
 
 ```sh
-cargo test  -p lidcore -p lid-macos   # both run on macOS
-cargo run   -p lid-macos              # the menu bar app, unbundled
+cargo test  -p lidcore -p lid-macos -p lid-cli   # all three run on macOS
+cargo run   -p lid-macos                         # the menu bar app, unbundled
 cargo run   -p lid-cli -- agents
 cargo run   -p lid-cli -- status
 ```
@@ -184,6 +184,32 @@ cargo run   -p lid-cli -- status
 An unbundled macOS build has no bundle identifier, so notifications, Launch at
 Login and the watchdog agent all stand down — everything else works. Run
 `../../scripts/package-macos-app.sh` to exercise those.
+
+### Checking the Windows crate from a Mac
+
+`lid-gui` is the one crate a Mac cannot build, because gpui's macOS backend
+needs the Metal shader compiler from full Xcode. Cross-compiling to the *MSVC*
+target avoids that path entirely — the blocker there is the Windows CRT and SDK
+headers, which [`cargo-xwin`](https://github.com/rust-cross/cargo-xwin) fetches
+and wires up:
+
+```sh
+brew install llvm                       # clang-cl, to compile the C in `ring`
+cargo install cargo-xwin --locked
+rustup target add x86_64-pc-windows-msvc
+
+# Homebrew's llvm is keg-only, so its bin directory has to be asked for.
+export PATH="$(brew --prefix llvm)/bin:$PATH"
+cargo xwin clippy -p lid-gui --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+```
+
+The first run also fetches the Windows CRT and SDK headers into
+`~/Library/Caches/cargo-xwin` (`~/.cache/cargo-xwin` on Linux); later runs reuse them. `lld` is a separate formula these
+days and is *not* needed here — clippy type-checks without linking.
+
+Worth doing before pushing a change to that crate: the Windows job in
+`ci-desktop.yml` is otherwise the only thing that ever type-checks it, and a
+round trip through CI to learn about a typo is a slow way to find one.
 
 ## Assets
 

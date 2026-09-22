@@ -10,6 +10,7 @@ use gpui::{ClickEvent, Context, Entity, FontWeight, Window, div, px};
 use lidcore::{AgentHarness, BatterySafetyPolicy, SessionDuration};
 
 use crate::config;
+use crate::error::GuiError;
 use crate::state::AppState;
 use crate::theme;
 
@@ -29,27 +30,47 @@ impl Panel {
     }
 
     fn toggle(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
-        self.state.update(cx, |state, cx| {
+        let headline = self.state.update(cx, |state, cx| {
             let result = if state.is_active() {
                 state.stop()
             } else {
                 state.start(SessionDuration::Indefinite)
             };
-            if let Err(error) = result {
-                tracing::error!(%error, hint = error.hint(), "could not toggle the hold");
-            }
             cx.notify();
+            report(result, "could not toggle the hold")
         });
+        self.announce(headline, cx);
     }
 
     fn hold_for(&mut self, duration: SessionDuration, cx: &mut Context<Self>) {
-        self.state.update(cx, |state, cx| {
-            if let Err(error) = state.start(duration) {
-                tracing::error!(%error, hint = error.hint(), "could not start the hold");
-            }
+        let headline = self.state.update(cx, |state, cx| {
+            let result = state.start(duration);
             cx.notify();
+            report(result, "could not start the hold")
         });
+        self.announce(headline, cx);
     }
+
+    /// Surfaces a refusal the way the tray menu already does.
+    ///
+    /// A release build hides the console, so the `tracing::error!` these paths
+    /// used to stop at reached nobody: clicking the switch or a preset when the
+    /// system refused looked exactly like clicking it and having nothing
+    /// happen.
+    fn announce(&self, headline: Option<String>, cx: &mut Context<Self>) {
+        if let Some(headline) = headline {
+            let _ = cx.show_notification(lidcore::APP_NAME, &headline);
+        }
+    }
+}
+
+/// Logs a failed hold change and returns the line worth interrupting the user
+/// with, if it is one. Transient bus problems usually resolve on the next
+/// attempt and only reach the log.
+fn report(result: Result<(), GuiError>, context: &'static str) -> Option<String> {
+    let error = result.err()?;
+    tracing::error!(%error, hint = error.hint(), "{context}");
+    error.deserves_notification().then(|| error.headline())
 }
 
 impl Render for Panel {

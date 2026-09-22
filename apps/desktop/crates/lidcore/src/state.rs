@@ -72,12 +72,17 @@ impl SleepControlState {
 }
 
 /// Formats a span the way the macOS panel does: `45m`, `1h 5m`.
+///
+/// Whole minutes, floored. The minutes used to be floored *and* then raised to
+/// at least one, which made a session with nothing left read "1m left" — the
+/// countdown's one chance to say something untrue, at the exact moment the user
+/// is watching it to see whether the hold is about to end.
 fn clock(span: Duration) -> String {
     let total = span.num_seconds().max(0);
     let hours = total / 3600;
     let minutes = (total % 3600) / 60;
     if hours == 0 {
-        format!("{}m", minutes.max(1))
+        format!("{minutes}m")
     } else {
         format!("{hours}h {minutes}m")
     }
@@ -111,6 +116,16 @@ mod tests {
         };
         assert!(!state.has_expired(Utc::now() + Duration::days(365)));
         assert!(state.remaining(Utc::now()).is_none());
+    }
+
+    #[test]
+    fn a_finished_countdown_does_not_claim_a_minute_it_has_not_got() {
+        let (state, now) = active_for(30);
+        let summary = state.summary(now + Duration::minutes(30));
+        assert!(summary.contains("0m left"), "{summary}");
+
+        let summary = state.summary(now + Duration::minutes(29));
+        assert!(summary.contains("1m left"), "{summary}");
     }
 
     #[test]

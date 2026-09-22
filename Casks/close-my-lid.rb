@@ -11,5 +11,18 @@ cask "close-my-lid" do
 
   app "Close My Lid.app"
 
-  zap trash: "~/Library/Preferences/app.closemylid.CloseMyLid.plist"
+  # The watchdog LaunchAgent has to go first: `launchctl` refuses to unload a
+  # job whose plist has already been deleted, and left loaded it wakes every 60
+  # seconds forever, pointing at a binary that is no longer there.
+  uninstall launchctl: "app.closemylid.watchdog",
+            delete:    "/etc/sudoers.d/close-my-lid"
+
+  zap trash: [
+    # The hold's session file, heartbeat and last-picked duration. `lidcore`
+    # derives this from ProjectDirs("com", "krishkalaria", "close-my-lid"),
+    # which is deliberately not the bundle identifier — see `lidcore::config`.
+    "~/Library/Application Support/com.krishkalaria.close-my-lid",
+    "~/Library/LaunchAgents/app.closemylid.watchdog.plist",
+    "~/Library/Preferences/app.closemylid.CloseMyLid.plist",
+  ]
 end

@@ -30,10 +30,26 @@ pub enum Command {
     Unknown(String),
 }
 
+/// An argument the window server or AppKit added to a launch, rather than one
+/// the user typed.
+///
+/// LaunchServices still passes `-psn_0_<n>` on some launch paths, and AppKit
+/// consumes `-NSDocumentRevisionsDebugMode` and friends itself — the latter
+/// with a value of its own, so nothing after one of these can be read as a
+/// subcommand either. Treating the first of them as a command made the app
+/// print "Unknown command" and exit 64: launched from Finder, or started as a
+/// login item, it would look like the app simply refused to open.
+fn is_launcher_argument(argument: &str) -> bool {
+    argument.starts_with("-psn_") || argument.starts_with("-NS")
+}
+
 pub fn parse(arguments: &[String]) -> Command {
     let Some(first) = arguments.first() else {
         return Command::MenuBar;
     };
+    if is_launcher_argument(first) {
+        return Command::MenuBar;
+    }
 
     match first.as_str() {
         "enable" => Command::Enable,
@@ -216,6 +232,19 @@ mod tests {
         // The plist is generated from this same constant, so a rename cannot
         // silently leave the agent invoking an unknown command every minute.
         assert_eq!(parsed(&[lidcore::launchd::WATCHDOG_ARG]), Command::Watchdog);
+    }
+
+    #[test]
+    fn a_launch_services_argument_still_opens_the_menu_bar_app() {
+        // Finder and login-item launches can add these. Reading one as a
+        // subcommand exited 64 instead of showing the status item.
+        assert_eq!(parsed(&["-psn_0_1234567"]), Command::MenuBar);
+        assert_eq!(
+            parsed(&["-NSDocumentRevisionsDebugMode", "YES"]),
+            Command::MenuBar
+        );
+        // The commands the watchdog and a shell pass still come first.
+        assert_eq!(parsed(&["status"]), Command::Status);
     }
 
     #[test]

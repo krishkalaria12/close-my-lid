@@ -15,7 +15,12 @@
   --line-p: #00933c;
   --line-o: #ff6319;
 
-  --font-grot: "Schibsted Grotesk", Helvetica, Arial, sans-serif;
+  /* "… Variable" is what `@fontsource-variable` names the face it ships (see
+     the import in Base.astro); the static name stays behind it so a machine
+     that already has the family installed still uses it. */
+  --font-grot:
+    "Schibsted Grotesk Variable", "Schibsted Grotesk", Helvetica, Arial,
+    sans-serif;
 }
 
 * {

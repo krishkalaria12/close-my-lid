@@ -8,6 +8,12 @@ on:
     paths: ["apps/desktop/**", ".github/workflows/ci-desktop.yml"]
   workflow_dispatch:
 
+# A push that supersedes an earlier one does not need the earlier one's matrix
+# finished: this is nine jobs across three operating systems.
+concurrency:
+  group: ci-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: apps/desktop
@@ -27,6 +33,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop
+
       - name: Test lidcore
         run: cargo test -p lidcore
 
@@ -45,8 +56,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Build the CLI
-        run: cargo build -p lid-cli
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop
+
+      - name: Test and lint the CLI
+        run: |
+          cargo test -p lid-cli
+          cargo clippy -p lid-cli --all-targets -- -D warnings
 
       - name: Smoke test the CLI
         # `agents` and `--help` need no privileges, unlike enable/disable.
@@ -68,8 +86,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Build the tray app
-        run: cargo build -p lid-gui
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop
+
+      - name: Build and lint the tray app
+        run: |
+          cargo build -p lid-gui
+          cargo clippy -p lid-gui --all-targets -- -D warnings
 
   menu-bar:
     runs-on: macos-15
@@ -77,6 +102,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop
 
       - name: Build and test the menu bar app
         run: |

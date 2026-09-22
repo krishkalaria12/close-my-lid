@@ -1,4 +1,11 @@
 ---
+// Self-hosted rather than fetched from Google Fonts. The stylesheet link was
+// render-blocking on a third-party origin — two preconnects and a round trip
+// before any text could paint — and it was a request to Google on every visit
+// that the privacy page then had to spend a paragraph disclosing. Vite inlines
+// this stylesheet and content-hashes the two woff2 files, so they are served
+// from this origin and cache forever.
+import "@fontsource-variable/schibsted-grotesk";
 import "../styles/global.css";
 import { site } from "../data/site";
 
@@ -106,13 +113,6 @@ const graph = [
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="sitemap" href="/sitemap-index.xml" />
-
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400..900&display=swap"
-    />
 
     <script
       type="application/ld+json"

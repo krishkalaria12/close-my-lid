@@ -1,7 +1,12 @@
 import { showHUD } from "@raycast/api";
-import { setClosedLidHold } from "./power";
+import { failureMessage, setClosedLidHold } from "./power";
 
 export default async function command() {
-  await setClosedLidHold(false);
+  try {
+    await setClosedLidHold(false);
+  } catch (error) {
+    await showHUD(failureMessage(error));
+    return;
+  }
   await showHUD("Close My Lid stopped");
 }
