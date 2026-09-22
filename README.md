@@ -1,24 +1,39 @@
 # Close My Lid
 
-Close My Lid keeps a Mac awake while coding agents, builds, downloads, and other long-running work continue after the laptop lid is closed.
+Close My Lid keeps a laptop awake while coding agents, builds, downloads, and other long-running work continue after the laptop lid is closed.
 
-It ships as a native macOS menu bar app, a `close-my-lid` CLI for Linux and Windows, a Raycast extension, Homebrew formula/cask packages, and the marketing site.
+It runs on macOS, Linux and Windows. It ships as a native macOS menu bar app, a Windows tray app, a `close-my-lid` CLI for all three, a Raycast extension, Homebrew formula/cask packages, and the marketing site.
 
 The whole desktop side is one Rust workspace: a shared `lidcore` crate holds the session state machine, persistence, agent detection and the per-OS lid mechanism, and each platform's interface is a thin shell over it.
 
 ## Install
 
-Most users only need the menu bar app:
+Every [release](https://github.com/krishkalaria12/close-my-lid/releases/latest)
+ships a build for each platform:
+
+| OS | What you get | Release asset |
+|---|---|---|
+| macOS 14+ (Apple silicon and Intel) | Menu bar app, which is also the `close-my-lid` command | `Close-My-Lid-vX.Y.Z-macOS.zip` |
+| Linux (x86_64) | `close-my-lid` CLI | `close-my-lid-vX.Y.Z-linux-x86_64.tar.gz` |
+| Windows 10/11 (x64) | Tray app and `close-my-lid` CLI | `Close-My-Lid-vX.Y.Z-windows-x86_64.zip` |
+
+### macOS
+
+**Homebrew (recommended).** Most users only need the menu bar app:
 
 ```sh
 brew install --cask krishkalaria12/close-my-lid/close-my-lid
 ```
 
-Install the CLI only if you want terminal/script access:
+Install the CLI only if you want terminal/script access without the app:
 
 ```sh
 brew install krishkalaria12/close-my-lid/close-my-lid
 ```
+
+The cask installs `Close My Lid.app` into `/Applications`. The formula builds
+the `close-my-lid` command-line tool from source. Upgrade with
+`brew upgrade --cask close-my-lid` or `brew upgrade close-my-lid`.
 
 If you installed Close My Lid before the dedicated Homebrew tap existed, replace the old custom tap clone once. Installed packages are preserved:
 
@@ -27,13 +42,77 @@ brew untap --force krishkalaria12/close-my-lid
 brew tap krishkalaria12/close-my-lid
 ```
 
-The cask installs `Close My Lid.app` into `/Applications`. The formula installs the `close-my-lid` command-line tool.
+**Install script.** Downloads the latest release, puts the app in
+`/Applications` and links `close-my-lid` into `~/.local/bin`:
 
-Every release carries an archive for each platform — the zipped `.app` for
-macOS, a `tar.gz` of the CLI for Linux, and a zip of the CLI and tray app for
-Windows:
+```sh
+curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | sh
+```
 
-- [Close My Lid v0.5.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.5.0)
+**Manual.** Download `Close-My-Lid-vX.Y.Z-macOS.zip` from the
+[latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest),
+unzip it and drag `Close My Lid.app` into `/Applications`.
+
+### Linux
+
+**Install script.** Installs the `close-my-lid` CLI into `~/.local/bin`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | sh
+```
+
+**Manual.** Download `close-my-lid-vX.Y.Z-linux-x86_64.tar.gz` from the
+[latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest)
+and put the binary on your `PATH`:
+
+```sh
+tar -xzf close-my-lid-v*-linux-x86_64.tar.gz
+install -m 755 close-my-lid-v*-linux-x86_64/close-my-lid ~/.local/bin/close-my-lid
+```
+
+**From source** (any architecture, needs Rust):
+
+```sh
+cargo install --git https://github.com/krishkalaria12/close-my-lid lid-cli
+```
+
+Then run `close-my-lid enable --for 2h`, or `close-my-lid systemd` for a user
+unit that holds the lid in the background.
+
+### Windows
+
+**Install script.** In PowerShell, installs the tray app and the CLI into
+`%LOCALAPPDATA%\Programs\CloseMyLid`, adds it to your `PATH` and creates a
+Start menu shortcut. No administrator rights needed:
+
+```powershell
+irm https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.ps1 | iex
+```
+
+**Manual.** Download `Close-My-Lid-vX.Y.Z-windows-x86_64.zip` from the
+[latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest),
+extract it anywhere, and run `close-my-lid-gui.exe` for the tray app or
+`close-my-lid.exe` from a terminal.
+
+### Install script options
+
+Both scripts install the latest release. Set these environment variables to
+change that:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CLOSE_MY_LID_VERSION` | latest | Release to install, e.g. `v0.5.0` |
+| `CLOSE_MY_LID_BIN_DIR` | `~/.local/bin` | macOS/Linux: where `close-my-lid` goes |
+| `CLOSE_MY_LID_APP_DIR` | `/Applications` | macOS: where the app goes |
+| `CLOSE_MY_LID_INSTALL_DIR` | `%LOCALAPPDATA%\Programs\CloseMyLid` | Windows: install folder |
+
+For example:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | CLOSE_MY_LID_VERSION=v0.5.0 sh
+```
+
+Re-running a script upgrades in place.
 
 ## Features
 
