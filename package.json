@@ -18,7 +18,7 @@
     "raycast:build": "pnpm --filter close-my-lid build",
     "raycast:lint": "pnpm --filter close-my-lid lint",
     "desktop:build": "cargo build --manifest-path apps/desktop/Cargo.toml",
-    "desktop:test": "cargo test --manifest-path apps/desktop/Cargo.toml -p lidcore -p lid-macos",
+    "desktop:test": "cargo test --manifest-path apps/desktop/Cargo.toml -p lidcore -p lid-macos -p lid-cli",
     "macos:build": "cargo build --manifest-path apps/desktop/Cargo.toml -p lid-macos",
     "macos:test": "cargo test --manifest-path apps/desktop/Cargo.toml -p lidcore -p lid-macos",
     "macos:package": "./scripts/package-macos-app.sh"
