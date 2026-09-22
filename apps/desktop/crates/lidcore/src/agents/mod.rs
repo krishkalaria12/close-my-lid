@@ -402,6 +402,60 @@ mod tests {
     }
 
     #[test]
+    fn recognises_each_official_install_layout() {
+        // What each installer actually leaves running, taken from the install
+        // scripts and packages themselves.
+        let cases: &[(&str, &[&str], AgentHarness)] = &[
+            // npm postinstall hard-links the native binary over bin/claude.exe.
+            ("claude.exe", &[], AgentHarness::ClaudeCode),
+            ("opencode.exe", &[], AgentHarness::OpenCode),
+            // Codex's standalone installer keeps releases/<ver>/bin/codex.
+            ("codex", &[], AgentHarness::Codex),
+            // Copilot's native binary loads auto-updates in-process.
+            ("copilot", &[], AgentHarness::Copilot),
+            (
+                "node",
+                &["node", "/opt/homebrew/bin/copilot"],
+                AgentHarness::Copilot,
+            ),
+            // The standalone CLI and the desktop app's executable.
+            ("agy", &[], AgentHarness::Antigravity),
+            ("Antigravity", &[], AgentHarness::Antigravity),
+            // Cursor's launcher execs its bundled node on the versioned bundle.
+            (
+                "node",
+                &[
+                    "/Users/k/.local/bin/agent",
+                    "--use-system-ca",
+                    "/Users/k/.local/share/cursor-agent/versions/2026.09.18-9a7762b/index.js",
+                ],
+                AgentHarness::Cursor,
+            ),
+            (
+                "node.exe",
+                &[
+                    "node.exe",
+                    r"C:\Users\k\AppData\Local\cursor-agent\versions\2026.09.18-9a7762b\index.js",
+                ],
+                AgentHarness::Cursor,
+            ),
+            // pi.dev's installer execs the release's node_modules/.bin/pi shim.
+            (
+                "node",
+                &[
+                    "node",
+                    "/Users/k/.pi/agent/install/releases/0.87.0/node_modules/.bin/pi",
+                ],
+                AgentHarness::Pi,
+            ),
+        ];
+        for (name, args, harness) in cases {
+            let counts = session_counts(&[process(18, 1, name, args)]);
+            assert_eq!(counts.get(harness), Some(&1), "{name} {args:?}");
+        }
+    }
+
+    #[test]
     fn recognises_a_release_binary_that_was_not_renamed() {
         for name in [
             "codex-aarch64-apple-darwin",
