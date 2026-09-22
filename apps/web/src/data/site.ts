@@ -14,7 +14,7 @@ export const site = {
   brewCask: "brew install --cask krishkalaria12/close-my-lid/close-my-lid",
   twitter: "https://x.com/KrishKalaria",
   twitterHandle: "@KrishKalaria",
-  privacyUpdated: "20 September 2026",
+  privacyUpdated: "22 September 2026",
 } as const;
 
 export type Agent = {
