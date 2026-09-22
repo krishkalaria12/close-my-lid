@@ -120,6 +120,19 @@ impl AgentHarness {
         }
     }
 
+    /// Name prefixes of release binaries that carry their target triple, for a
+    /// download that was linked or run in place rather than renamed.
+    fn release_binary_prefixes(&self) -> &'static [&'static str] {
+        match self {
+            // `codex-aarch64-apple-darwin` and friends. Anchored on the
+            // architecture so the standalone installer's `codex-code-mode-host`
+            // helper cannot match, and short enough to survive Linux truncating
+            // a process name to 15 bytes.
+            Self::Codex => &["codex-x86_64-", "codex-aarch64-"],
+            _ => &[],
+        }
+    }
+
     fn matching_install_path(path: &str) -> Option<Self> {
         let normalised = normalise_separators(path);
         Self::ALL.into_iter().find(|harness| {
@@ -137,6 +150,10 @@ impl AgentHarness {
                 .executable_names()
                 .iter()
                 .any(|candidate| candidate.eq_ignore_ascii_case(stem))
+                || harness.release_binary_prefixes().iter().any(|prefix| {
+                    stem.get(..prefix.len())
+                        .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+                })
         })
     }
 
@@ -382,6 +399,23 @@ mod tests {
         let mut other = process(13, 1, "2.1.280", &[]);
         other.executable_path = Some("/opt/tool/versions/2.1.280".to_string());
         assert!(session_counts(&[other]).is_empty());
+    }
+
+    #[test]
+    fn recognises_a_release_binary_that_was_not_renamed() {
+        for name in [
+            "codex-aarch64-apple-darwin",
+            "codex-x86_64-pc-windows-msvc.exe",
+            // Linux keeps only the first 15 bytes of a process name.
+            "codex-x86_64-un",
+            "codex-aarch64-u",
+        ] {
+            let counts = session_counts(&[process(16, 1, name, &[])]);
+            assert_eq!(counts.get(&AgentHarness::Codex), Some(&1), "{name}");
+        }
+
+        // The standalone installer's helper binary is not a session.
+        assert!(session_counts(&[process(17, 1, "codex-code-mode-host", &[])]).is_empty());
     }
 
     #[test]
