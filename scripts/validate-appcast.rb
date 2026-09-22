@@ -25,6 +25,7 @@ path = ARGV.fetch(0, "appcast.xml")
 document = REXML::Document.new(File.read(path))
 errors = []
 items = 0
+short_versions = []
 
 REXML::XPath.each(document, "/rss/channel/item") do |item|
   items += 1
@@ -44,7 +45,11 @@ REXML::XPath.each(document, "/rss/channel/item") do |item|
   errors << "update enclosure has a non-numeric sparkle:version" unless version&.match?(/\A\d+\z/)
   # This is the field the app compares against its own version. Without it an
   # update is published that no running app can ever notice.
-  unless short_version&.match?(/\A\d+(\.\d+)*/)
+  # Anchored at both ends: an unanchored match let `1.2.3-oops` through, and
+  # the app compares this field as a semantic version.
+  if short_version&.match?(/\A\d+(\.\d+)*\z/)
+    short_versions << short_version
+  else
     errors << "update item is missing a dotted sparkle:shortVersionString"
   end
   errors << "update enclosure has an invalid length" unless length&.match?(/\A[1-9]\d*\z/)
@@ -63,9 +68,17 @@ REXML::XPath.each(document, "/rss/channel/item") do |item|
   end
 end
 
-# The app reads the first item and nothing else, so an empty feed would be
-# silently treated as "no update available" forever.
+# An empty feed is silently treated as "no update available" forever.
 errors << "appcast has no update items" if items.zero?
+
+# The app picks the highest version rather than the first element, so a feed in
+# the wrong order is no longer a broken update. It is still a broken *changelog*
+# — this file is read by people too — and the drift is worth catching at the
+# commit rather than at a release.
+ordered = short_versions.sort_by { |version| version.split(".").map(&:to_i) }.reverse
+if short_versions != ordered
+  errors << "appcast items must run newest-first; expected #{ordered.join(', ')}"
+end
 
 abort(errors.join("\n")) unless errors.empty?
 puts "Appcast is valid"
