@@ -32,8 +32,9 @@ mod theme;
 
 use gpui::single_instance::{SingleInstance, send_activate_to_existing};
 use gpui::{
-    App, AppContext, Application, Bounds, TitlebarOptions, TrayIconEvent, TrayMenuItem, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, px, size,
+    AnyWindowHandle, App, AppContext, Application, Bounds, Entity, TitlebarOptions, TrayIconEvent,
+    TrayMenuItem, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, px,
+    size,
 };
 use lidcore::{APP_ID, APP_NAME, SessionDuration};
 
@@ -111,16 +112,20 @@ fn setup_tray(cx: &mut App) {
     cx.set_tray_menu(items);
 }
 
-fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
+fn wire_tray_actions(state: Entity<AppState>, cx: &mut App) {
     let panel_state = state.clone();
     cx.on_tray_icon_event(move |event, cx| {
+        // Toggle, not open. A click used to open a panel unconditionally, which
+        // both stacked duplicates and left the user no way to put one away —
+        // nothing in this app ever closed the window.
         if matches!(event, TrayIconEvent::LeftClick) {
-            open_panel(panel_state.clone(), cx);
+            toggle_panel(panel_state.clone(), cx);
         }
     });
 
     cx.on_tray_menu_action(move |id, cx| match id.as_ref() {
-        action::PANEL => open_panel(state.clone(), cx),
+        // The menu item is named "Open Panel", so it opens rather than toggles.
+        action::PANEL => show_panel(state.clone(), cx),
         action::STOP => {
             let headline: Option<String> = state.update(cx, |state, cx| {
                 if let Err(error) = state.stop() {
@@ -171,13 +176,52 @@ fn wire_tray_actions(state: gpui::Entity<AppState>, cx: &mut App) {
     });
 }
 
-fn open_panel(state: gpui::Entity<AppState>, cx: &mut App) {
-    // Scan for agents only when the panel is about to be shown, so the process
-    // walk never runs for a UI nobody can see.
+/// The panel window this app opened, if it is still on screen.
+///
+/// An `AnyWindowHandle` outlives its window, so the stored handle is probed
+/// rather than trusted: `update` fails exactly when the window is gone, which is
+/// also how a window the user closed from the OS gets forgotten here.
+fn live_panel(state: &Entity<AppState>, cx: &mut App) -> Option<AnyWindowHandle> {
+    let handle = state.read(cx).panel?;
+    if handle.update(cx, |_, _, _| ()).is_ok() {
+        return Some(handle);
+    }
+    state.update(cx, |state, _| state.panel = None);
+    None
+}
+
+/// Opens the panel, or brings the open one forward.
+fn show_panel(state: Entity<AppState>, cx: &mut App) {
+    if let Some(handle) = live_panel(&state, cx) {
+        let _ = handle.update(cx, |_, window, _| window.activate_window());
+        refresh_for_panel(&state, cx);
+        return;
+    }
+    open_panel(state, cx);
+}
+
+/// Opens the panel if it is closed, and closes it if it is open — what a tray
+/// icon click does everywhere else.
+fn toggle_panel(state: Entity<AppState>, cx: &mut App) {
+    if let Some(handle) = live_panel(&state, cx) {
+        let _ = handle.update(cx, |_, window, _| window.remove_window());
+        state.update(cx, |state, _| state.panel = None);
+        return;
+    }
+    open_panel(state, cx);
+}
+
+/// Scan for agents only when the panel is about to be shown, so the process
+/// walk never runs for a UI nobody can see.
+fn refresh_for_panel(state: &Entity<AppState>, cx: &mut App) {
     state.update(cx, |state, cx| {
         state.refresh_readouts();
         cx.notify();
     });
+}
+
+fn open_panel(state: Entity<AppState>, cx: &mut App) {
+    refresh_for_panel(&state, cx);
 
     let bounds: Bounds<_> =
         anchor::panel_bounds(size(px(config::PANEL_WIDTH), px(config::PANEL_HEIGHT)), cx);
@@ -193,30 +237,52 @@ fn open_panel(state: gpui::Entity<AppState>, cx: &mut App) {
         ..Default::default()
     };
 
-    if let Err(error) = cx.open_window(options, |_window: &mut Window, cx| {
+    // Bound before the match rather than used as its scrutinee: the arms need
+    // `cx` again, and a scrutinee's borrow of it lives until the match ends.
+    let opened = cx.open_window(options, |_window: &mut Window, cx| {
         cx.new(|cx| Panel::new(state.clone(), cx))
-    }) {
-        let error = crate::error::GuiError::Window {
-            detail: error.to_string(),
-        };
-        tracing::error!(%error, "could not open the panel");
+    });
+
+    match opened {
+        // Recorded so the next click reaches this window instead of opening a
+        // second one beside it.
+        Ok(handle) => {
+            state.update(cx, |state, _| state.panel = Some(handle.into()));
+        }
+        Err(error) => {
+            let error = crate::error::GuiError::Window {
+                detail: error.to_string(),
+            };
+            tracing::error!(%error, "could not open the panel");
+        }
     }
 }
 
 /// Drives expiry and the battery safety release regardless of whether any
 /// window is open — the hold must end on time with the panel closed.
-fn start_supervisor(state: gpui::Entity<AppState>, cx: &mut App) {
+fn start_supervisor(state: Entity<AppState>, cx: &mut App) {
     cx.spawn(async move |cx| {
         loop {
             cx.background_executor()
                 .timer(config::SUPERVISION_INTERVAL)
                 .await;
 
+            // The process walk and the battery read are only worth paying for
+            // while someone is looking at them.
+            let visible = cx
+                .update(|cx| live_panel(&state, cx).is_some())
+                .unwrap_or(false);
+
             let released = state.update(cx, |state, cx| {
-                let released = state.tick();
-                if released {
-                    cx.notify();
+                if visible {
+                    state.refresh_readouts();
                 }
+                let released = state.tick();
+                // Unconditional, where this used to notify only on a release.
+                // The panel builds "45m left" from the clock at render time, so
+                // with nothing marking it dirty the countdown sat frozen at
+                // whatever it said the moment the panel opened.
+                cx.notify();
                 released
             });
 

@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use gpui::AnyWindowHandle;
 use lidcore::{
     AgentHarness, BatteryStatus, HoldLock, SessionDuration, SleepControlState,
     SleepSessionController, battery,
@@ -23,6 +24,17 @@ pub struct AppState {
     pub startup_error: Option<GuiError>,
     pub battery: Option<BatteryStatus>,
     pub agents: HashMap<AgentHarness, usize>,
+    /// The panel window, while one is open.
+    ///
+    /// Kept so a second click on the tray icon reaches the window the first one
+    /// opened. Without it every click called `open_window` again and the
+    /// flyouts stacked up, each an independent copy of the same panel with no
+    /// way to dismiss any of them.
+    ///
+    /// A handle outlives its window — the user can close one from the OS — so
+    /// `Some` is never taken as proof the window is still there; `live_panel`
+    /// in `main.rs` probes it and clears this when it is gone.
+    pub panel: Option<AnyWindowHandle>,
 }
 
 impl AppState {
@@ -47,6 +59,7 @@ impl AppState {
             startup_error,
             battery: None,
             agents: HashMap::new(),
+            panel: None,
         };
         state.refresh_readouts();
         state
@@ -96,7 +109,9 @@ impl AppState {
 
     /// The controller, or an error explaining why there isn't one.
     fn controller_mut(&mut self) -> Result<&mut SleepSessionController> {
-        self.controller.as_mut().ok_or_else(|| GuiError::NoBackend {
+        // `ok_or`, not `ok_or_else`: the error is a pair of constants with
+        // nothing to defer, and clippy rejects the closure.
+        self.controller.as_mut().ok_or(GuiError::NoBackend {
             source: lidcore::LidError::UnsupportedPlatform {
                 os: std::env::consts::OS,
             },
