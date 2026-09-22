@@ -3,6 +3,14 @@
     <channel>
         <title>Close My Lid</title>
         <item>
+            <title>0.5.0</title>
+            <pubDate>Tue, 22 Sep 2026 14:11:31 +0530</pubDate>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/krishkalaria12/close-my-lid/releases/download/v0.5.0/Close-My-Lid-v0.5.0-macOS.zip" length="4126908" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>0.4.4</title>
             <pubDate>Tue, 01 Sep 2026 16:16:33 +0530</pubDate>
             <sparkle:version>8</sparkle:version>
