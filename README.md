@@ -92,7 +92,7 @@ The project is organized as a small monorepo so the native app, Raycast extensio
 
 ```text
 apps/desktop/      Rust workspace: shared core, macOS menu bar app, CLI, Windows tray app
-apps/web/          Astro + Tailwind + React marketing site
+apps/web/          Astro + Tailwind marketing site
 packages/raycast/  Raycast extension
 Formula/           Legacy migration copy of the Homebrew CLI formula
 Casks/             Legacy migration copy of the Homebrew app cask
@@ -113,6 +113,7 @@ Root scripts proxy to the workspace packages:
 pnpm dev             # run the website locally
 pnpm build           # type-check and build the website
 pnpm raycast:dev     # run the Raycast extension
+pnpm raycast:lint    # lint and format-check the Raycast extension
 pnpm macos:build     # build the menu bar app
 pnpm macos:test      # run the shared-core and app tests
 pnpm macos:package   # build the .app bundle into dist/macos
@@ -122,7 +123,7 @@ Build and test the Rust workspace:
 
 ```sh
 cd apps/desktop
-cargo test -p lidcore -p lid-macos
+cargo test -p lidcore -p lid-macos -p lid-cli
 cargo run -p lid-macos -- --help
 cargo run -p lid-macos            # the menu bar app, unbundled
 cargo run -p lid-cli -- agents
