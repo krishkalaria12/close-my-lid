@@ -100,11 +100,14 @@ docs/              Product and implementation notes
 scripts/           Release and packaging helpers
 ```
 
-The JavaScript packages are a pnpm workspace (`pnpm-workspace.yaml`). Install
-once from the repository root:
+The website is a pnpm workspace (`pnpm-workspace.yaml`); install it from the
+repository root. The Raycast extension is deliberately outside that workspace
+and uses npm, because `ray lint` validates that the extension directory holds
+its own `package-lock.json`:
 
 ```sh
-pnpm install
+pnpm install                        # the website
+npm --prefix packages/raycast ci    # the Raycast extension
 ```
 
 Root scripts proxy to the workspace packages:

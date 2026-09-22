@@ -53,11 +53,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # One install for the whole workspace. The Raycast extension used to be
-      # installed separately with `npm ci` from its own lockfile, which meant
-      # two resolvers over one repository — and the pnpm copy resolved
-      # `@raycast/api`'s peer types differently, so `tsc` disagreed with itself
-      # depending on which install you were looking at.
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
@@ -68,12 +63,20 @@ jobs:
       - name: Build the website
         run: pnpm --filter @close-my-lid/web build
 
+      # npm, not pnpm: `ray lint` validates that the extension directory holds
+      # its own `package-lock.json`, and pnpm keeps one lockfile at the
+      # workspace root. `packages/raycast` is excluded from the pnpm workspace
+      # for that reason — see `pnpm-workspace.yaml`.
+      - name: Install Raycast dependencies
+        working-directory: packages/raycast
+        run: npm ci
+
       - name: Validate Raycast extension
         working-directory: packages/raycast
         run: |
-          pnpm run lint
-          pnpm run build
-          pnpm exec tsc --noEmit
+          npm run lint
+          npm run build
+          npx tsc --noEmit
 
       - name: Validate Homebrew formula
         run: |

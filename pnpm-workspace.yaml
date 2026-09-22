@@ -1,6 +1,16 @@
 packages:
   - "apps/web"
-  - "packages/raycast"
+
+# `packages/raycast` is deliberately absent. `ray lint` validates that the
+# extension directory holds its own `package-lock.json` — a check it runs only
+# when CI is set — and pnpm keeps a single lockfile at the workspace root, so
+# there is nothing there for it to find. The extension therefore stays on npm
+# and is installed with `npm ci`.
+#
+# What this does fix is the package being managed by *both*: it used to be a
+# pnpm workspace member with an npm lockfile as well, so the repository was
+# resolved twice by two resolvers and `tsc` disagreed with itself depending on
+# which install you were looking at. One package, one package manager.
 
 # sharp's postinstall is what Astro's image pipeline needs, so its build script
 # must be allowed. pnpm 10 spells this onlyBuiltDependencies and pnpm 12 spells
