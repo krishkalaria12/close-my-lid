@@ -1,16 +1,27 @@
+/**
+ * The shipped release. One place, because the two URLs below spell it three
+ * more times: a bump that missed one of them pointed the download button at the
+ * previous release while the page claimed the new one.
+ *
+ * Kept in step with `[workspace.package] version` in `apps/desktop/Cargo.toml`,
+ * which is what the app reports and compares against `appcast.xml`.
+ */
+const version = "0.4.4";
+
+const repo = "https://github.com/krishkalaria12/close-my-lid";
+
 export const site = {
   name: "Close My Lid",
   tagline: "Keeps your Mac awake with the lid closed",
   author: "Krish Kalaria",
   url: "https://closemylid.app",
-  version: "0.4.4",
+  version,
   minMacOS: "macOS 14 or later",
   arch: "Apple silicon",
-  repo: "https://github.com/krishkalaria12/close-my-lid",
-  release: "https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.4.4",
-  download:
-    "https://github.com/krishkalaria12/close-my-lid/releases/download/v0.4.4/Close-My-Lid-v0.4.4-macOS.zip",
-  issues: "https://github.com/krishkalaria12/close-my-lid/issues",
+  repo,
+  release: `${repo}/releases/tag/v${version}`,
+  download: `${repo}/releases/download/v${version}/Close-My-Lid-v${version}-macOS.zip`,
+  issues: `${repo}/issues`,
   brewCask: "brew install --cask krishkalaria12/close-my-lid/close-my-lid",
   twitter: "https://x.com/KrishKalaria",
   twitterHandle: "@KrishKalaria",
