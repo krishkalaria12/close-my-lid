@@ -1,10 +1,15 @@
 import { showHUD } from "@raycast/api";
-import { readClosedLidHold } from "./power";
+import { failureMessage, readClosedLidHold } from "./power";
 
 export default async function command() {
-  const enabled = await readClosedLidHold();
-  const message = enabled
-    ? "Closed-lid hold is enabled"
-    : "Closed-lid hold is disabled";
-  await showHUD(message);
+  let enabled: boolean;
+  try {
+    enabled = await readClosedLidHold();
+  } catch (error) {
+    await showHUD(failureMessage(error));
+    return;
+  }
+  await showHUD(
+    enabled ? "Closed-lid hold is enabled" : "Closed-lid hold is disabled",
+  );
 }
