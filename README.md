@@ -29,9 +29,11 @@ brew tap krishkalaria12/close-my-lid
 
 The cask installs `Close My Lid.app` into `/Applications`. The formula installs the `close-my-lid` command-line tool.
 
-The GitHub release also includes a zipped `.app` bundle:
+Every release carries an archive for each platform — the zipped `.app` for
+macOS, a `tar.gz` of the CLI for Linux, and a zip of the CLI and tray app for
+Windows:
 
-- [Close My Lid v0.4.4](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.4.4)
+- [Close My Lid v0.5.0](https://github.com/krishkalaria12/close-my-lid/releases/tag/v0.5.0)
 
 ## Features
 

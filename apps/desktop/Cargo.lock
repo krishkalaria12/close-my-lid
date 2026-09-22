@@ -3252,7 +3252,7 @@ dependencies = [
 
 [[package]]
 name = "lid-cli"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "clap 4.6.7",
@@ -3266,7 +3266,7 @@ dependencies = [
 
 [[package]]
 name = "lid-gui"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "adabraka-gpui",
  "chrono",
@@ -3278,7 +3278,7 @@ dependencies = [
 
 [[package]]
 name = "lid-macos"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "block2",
  "chrono",
@@ -3298,7 +3298,7 @@ dependencies = [
 
 [[package]]
 name = "lidcore"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "directories",

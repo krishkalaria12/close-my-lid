@@ -6,7 +6,7 @@
  * Kept in step with `[workspace.package] version` in `apps/desktop/Cargo.toml`,
  * which is what the app reports and compares against `appcast.xml`.
  */
-const version = "0.4.4";
+const version = "0.5.0";
 
 const repo = "https://github.com/krishkalaria12/close-my-lid";
 
