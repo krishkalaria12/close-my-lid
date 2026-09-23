@@ -2,7 +2,7 @@
 
 Close My Lid keeps a laptop awake while coding agents, builds, downloads, and other long-running work continue after the laptop lid is closed.
 
-It runs on macOS, Linux and Windows. It ships as a native macOS menu bar app, a Windows tray app, a `close-my-lid` CLI for all three, a Raycast extension, Homebrew formula/cask packages, and the marketing site.
+It runs on macOS, Linux and Windows. It ships as a native macOS menu bar app, a desktop app for Windows and Linux, a `close-my-lid` CLI for all three, a Raycast extension, Homebrew formula/cask packages, and the marketing site.
 
 The whole desktop side is one Rust workspace: a shared `lidcore` crate holds the session state machine, persistence, agent detection and the per-OS lid mechanism, and each platform's interface is a thin shell over it.
 
@@ -14,8 +14,8 @@ ships a build for each platform:
 | OS | What you get | Release asset |
 |---|---|---|
 | macOS 14+ (Apple silicon and Intel) | Menu bar app, which is also the `close-my-lid` command | `Close-My-Lid-vX.Y.Z-macOS.zip` |
-| Linux (x86_64) | `close-my-lid` CLI | `close-my-lid-vX.Y.Z-linux-x86_64.tar.gz` |
-| Windows 10/11 (x64) | Tray app and `close-my-lid` CLI | `Close-My-Lid-vX.Y.Z-windows-x86_64.zip` |
+| Linux (x86_64) | Desktop app and `close-my-lid` CLI | `close-my-lid-vX.Y.Z-linux-x86_64.tar.gz` |
+| Windows 10/11 (x64) | Desktop app and `close-my-lid` CLI | `Close-My-Lid-vX.Y.Z-windows-x86_64.zip` |
 
 ### macOS
 
@@ -55,7 +55,8 @@ unzip it and drag `Close My Lid.app` into `/Applications`.
 
 ### Linux
 
-**Install script.** Installs the `close-my-lid` CLI into `~/.local/bin`:
+**Install script.** Installs the desktop app and the `close-my-lid` CLI into
+`~/.local/bin`, and adds Close My Lid to your application menu:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | sh
@@ -63,12 +64,16 @@ curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/sc
 
 **Manual.** Download `close-my-lid-vX.Y.Z-linux-x86_64.tar.gz` from the
 [latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest)
-and put the binary on your `PATH`:
+and put the binaries on your `PATH`:
 
 ```sh
 tar -xzf close-my-lid-v*-linux-x86_64.tar.gz
 install -m 755 close-my-lid-v*-linux-x86_64/close-my-lid ~/.local/bin/close-my-lid
+install -m 755 close-my-lid-v*-linux-x86_64/close-my-lid-gui ~/.local/bin/close-my-lid-gui
 ```
+
+The archive also carries a `.desktop` entry and an icon; the install script
+puts those in your application menu for you.
 
 **From source** (any architecture, needs Rust):
 
@@ -76,12 +81,13 @@ install -m 755 close-my-lid-v*-linux-x86_64/close-my-lid ~/.local/bin/close-my-l
 cargo install --git https://github.com/krishkalaria12/close-my-lid lid-cli
 ```
 
-Then run `close-my-lid enable --for 2h`, or `close-my-lid systemd` for a user
-unit that holds the lid in the background.
+Open **Close My Lid** from your application menu, or from a terminal run
+`close-my-lid enable --for 2h`, or `close-my-lid systemd` for a user unit that
+holds the lid in the background.
 
 ### Windows
 
-**Install script.** In PowerShell, installs the tray app and the CLI into
+**Install script.** In PowerShell, installs the desktop app and the CLI into
 `%LOCALAPPDATA%\Programs\CloseMyLid`, adds it to your `PATH` and creates a
 Start menu shortcut. No administrator rights needed:
 
@@ -91,7 +97,7 @@ irm https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/i
 
 **Manual.** Download `Close-My-Lid-vX.Y.Z-windows-x86_64.zip` from the
 [latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest),
-extract it anywhere, and run `close-my-lid-gui.exe` for the tray app or
+extract it anywhere, and run `close-my-lid-gui.exe` for the desktop app or
 `close-my-lid.exe` from a terminal.
 
 ### Install script options
@@ -142,6 +148,26 @@ Closed-lid sleep prevention requires administrator approval. Close My Lid restor
 
 Close My Lid posts a notification when a hold starts, when a timed session has about 5 minutes left, and when it ends. macOS asks for notification permission the first time the app launches; you can change it later in System Settings › Notifications. Indefinite holds only post the start notification since they have no scheduled end.
 
+## Windows and Linux App
+
+Open **Close My Lid** from the Start menu or your application menu. It is an
+ordinary desktop window with three pages:
+
+- **Overview** — whether the lid is held, a live countdown, the duration
+  picker, and Start/Stop, with the battery and running agents alongside
+- **Agents** — every supported coding agent and how many sessions it has open
+- **Settings** — launch at login, notifications, how the lid is held on your
+  system, a shortcut to the system's power settings, and update checks
+
+Keyboard: `Ctrl+Enter` starts or stops a hold, `Ctrl+1`/`Ctrl+2`/`Ctrl+,`
+switch pages, `Ctrl+Q` quits. The app follows the system's light or dark
+appearance.
+
+Closing the window quits the app, and quitting always restores normal sleep —
+there is no hidden background hold. On Linux no administrator rights are
+needed: the hold is a logind inhibitor that the system drops the moment the
+app exits.
+
 ## CLI
 
 ```sh
@@ -172,7 +198,7 @@ It uses the same `pmset` behavior as the native app and is restricted to macOS i
 The project is organized as a small monorepo so the native app, Raycast extension, Homebrew packages, and future website can share one product direction.
 
 ```text
-apps/desktop/      Rust workspace: shared core, macOS menu bar app, CLI, Windows tray app
+apps/desktop/      Rust workspace: shared core, macOS menu bar app, CLI, Windows/Linux desktop app
 apps/web/          Astro + Tailwind marketing site
 packages/raycast/  Raycast extension
 Formula/           Legacy migration copy of the Homebrew CLI formula

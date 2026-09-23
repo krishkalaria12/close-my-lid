@@ -9,8 +9,8 @@ use std::time::Duration;
 
 /// How often a foreground hold checks for expiry and low battery.
 ///
-/// Re-exported from the core so the CLI and the tray app supervise at the same
-/// cadence.
+/// Re-exported from the core so the CLI and the desktop app supervise at the
+/// same cadence.
 #[cfg(not(target_os = "macos"))]
 pub const SUPERVISION_INTERVAL: Duration = lidcore::config::SUPERVISION_INTERVAL;
 

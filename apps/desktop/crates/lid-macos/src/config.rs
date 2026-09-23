@@ -1,6 +1,6 @@
 //! Every tunable value the app layer owns.
 //!
-//! Anything shared with the CLI and the tray app lives in `lidcore::config`
+//! Anything shared with the CLI and the desktop app lives in `lidcore::config`
 //! and is re-exported here, so the surfaces cannot drift apart on things like
 //! the battery threshold. What is left is genuinely about this UI.
 

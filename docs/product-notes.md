@@ -4,7 +4,7 @@ Close My Lid is aimed at developers who want coding agents, builds, downloads, o
 
 ## Initial Scope
 
-- Native macOS menu bar app, written in Rust against AppKit through `objc2`. Everything that is not a user interface lives in the `lidcore` crate and is shared with the Linux CLI and the Windows tray app.
+- Native macOS menu bar app, written in Rust against AppKit through `objc2`. Everything that is not a user interface lives in the `lidcore` crate and is shared with the CLI and the Windows and Linux desktop app.
 - One-click sleep hold sessions: 30 minutes, 1 hour, 4 hours, and indefinite.
 - Automatic cleanup when a timed session expires or the app quits.
 - Low-battery safety release: an active hold is stopped and normal sleep restored when the battery drops to 5% (`lidcore::config::BATTERY_RELEASE_THRESHOLD`) on battery power. Charging Macs are left alone. Enforced on the same 30 second reconciliation timer as `pmset` state (`lid-macos::config::RECONCILE_INTERVAL`).

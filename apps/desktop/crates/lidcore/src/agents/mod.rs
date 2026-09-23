@@ -53,7 +53,7 @@ impl AgentHarness {
         }
     }
 
-    /// Badge colour used by the tray panel, matching the macOS `AgentIcons`.
+    /// Badge colour used by the app's agent badges, matching the macOS `AgentIcons`.
     pub fn badge_rgb(&self) -> u32 {
         match self {
             Self::ClaudeCode => 0x1c1c1f,

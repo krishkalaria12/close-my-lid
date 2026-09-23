@@ -46,7 +46,7 @@ administrator dialog out of a background agent.
 | `lidcore` | — | all | state machine, persistence, agent detection, per-OS backends |
 | `lid-macos` | `CloseMyLid` | macOS | the menu bar app, and the product on macOS |
 | `lid-cli` | `close-my-lid` | all | the primary surface on Linux |
-| `lid-gui` | `close-my-lid-gui` | Windows | tray app on adabraka-gpui |
+| `lid-gui` | `close-my-lid-gui` | Windows, Linux | desktop app on gpui-kit |
 
 `lidcore` must never depend on a UI framework. That boundary is what keeps the
 UI choice reversible, and it is why three very different front ends share
@@ -61,10 +61,8 @@ cross-platform UI framework. Two reasons:
   under it, `NSVisualEffectView`, template images that follow the menu bar's
   theme, `SMAppService`, `UNUserNotificationCenter` — almost all of it is
   AppKit surface a portable toolkit would have to re-expose anyway.
-- **It builds with Command Line Tools alone.** GPUI, the toolkit `lid-gui`
-  uses on Windows, needs the Metal shader compiler from *full* Xcode; without
-  it the build fails with `xcrun: error: unable to find utility "metal"`. An
-  app nobody can build from a stock developer machine is an app nobody fixes.
+- **It builds with Command Line Tools alone**, with no UI toolkit between it
+  and the system, so the app is one small executable.
 
 The panel is laid out with explicit frames rather than Auto Layout: it is a
 fixed width with a computed height, so there is nothing to solve, and the whole
@@ -117,13 +115,60 @@ without parsing text — `64` bad usage, `77` refused, `72` bad state file — a
 prints the cause chain and hint to stderr. The menu bar app puts the same two
 parts on the two lines of an `NSAlert`.
 
-## Why the CLI leads on Linux
+## The Windows and Linux app
 
-Stock GNOME ships no system tray without the AppIndicator extension, and
-Wayland does not let a client anchor a window under a tray icon — the
-StatusNotifierItem protocol does not even expose the icon's geometry. Rather
-than ship something that breaks on the most common desktop, Linux treats the
-CLI as the product and the tray as a bonus.
+`lid-gui` is a desktop app rather than a tray panel. Stock GNOME ships no
+system tray without the AppIndicator extension, Wayland does not let a client
+anchor a window under a tray icon, and Windows 11 hides new tray icons in the
+taskbar overflow — so a menu bar panel carried over would have been invisible
+or misplaced on most of the machines it targets. The same features are laid
+out as an ordinary window instead: a sidebar with Overview, Agents and
+Settings.
+
+It is built on [gpui-kit](https://gpui-kit.com/): Zed's GPUI (published as
+`gpui-pre`) plus the gpui-component library. Buttons, cards, the segmented
+duration picker and the palette are drawn from gpui primitives so they match
+exactly in light and dark; the switch, title bar, icons and theme come from
+gpui-component. The title bar draws the window controls itself, which on
+Linux is also what gives the window decorations under GNOME's Wayland session.
+
+| file | role |
+|---|---|
+| `shell.rs` | window, sidebar, page routing, keyboard shortcuts |
+| `overview.rs`, `agent_list.rs`, `settings.rs` | the three pages |
+| `widgets.rs`, `theme.rs` | shared pieces and the light/dark palette |
+| `state.rs` | the hold, readouts, pending notifications — plain methods, no gpui |
+| `tasks.rs` | supervision, the countdown clock, readouts, update checks, quit |
+| `system.rs` | notifications, launch at login, power settings, single instance |
+
+What runs when:
+
+| loop | interval | does |
+|---|---|---|
+| clock | 1s, only while a hold runs | re-renders the countdown |
+| supervision | 15s, or sooner when the hold ends or a notification is due | expiry, battery release, scheduled notifications |
+| readouts | 5s focused, 30s in the background | battery and agent sessions, on the background executor |
+| updates | 2s after launch, then 6h | reads the appcast, on the background executor |
+
+Closing the window quits, and every way out releases the hold first. There is
+deliberately no background mode: a hold with no window to show it would be a
+hold nobody could see or stop.
+
+### It builds on a Mac too
+
+gpui-kit compiles GPUI's Metal shaders at runtime, so unlike the old
+adabraka-gpui tray app, `lid-gui` builds on macOS with Command Line Tools
+alone. That build exists only for working on the interface: it swaps in an
+in-memory preview backend (`preview.rs`) and never touches `pmset`, the hold
+lock, or the files the installed menu bar app reads.
+
+```sh
+cargo run -p lid-gui                                       # the app, on a Mac
+CLOSE_MY_LID_PREVIEW=holding-1h cargo run -p lid-gui       # with a hold running
+CLOSE_MY_LID_PREVIEW=agents cargo run -p lid-gui           # or: settings, holding
+```
+
+## Why `enable` blocks
 
 `close-my-lid enable` blocks while holding on Linux and Windows, like
 `systemd-inhibit` and macOS `caffeinate`. On Linux it has to: the inhibitor
@@ -145,38 +190,32 @@ watchdog supervises it from there.
 | Linux logind backend | type-checks for `x86_64-unknown-linux-gnu`, **needs hardware testing** |
 | Windows power-scheme backend | type-checks for `x86_64-pc-windows-msvc`, **needs hardware testing** |
 | `lid-cli` | done |
-| `lid-gui` panel and tray | compiles and lints on Windows in CI, **needs hardware testing** |
+| `lid-gui` desktop app | runs on macOS (preview backend); type-checks and lints for Windows and Linux, **needs hardware testing** |
 | macOS packaging | done (`scripts/package-macos-app.sh`) |
-| Windows and Linux packaging | not started |
+| Windows and Linux packaging | release archives and install scripts; no signed installer yet |
 
 ## Known gaps
 
-- **`tray_icon_bounds()` is macOS-only** in adabraka-gpui 0.5.1; Windows and
-  Linux get the `None` default. `anchor.rs` falls back to the bottom-right of
-  the work area. A proper Windows implementation is tractable via
-  `Shell_NotifyIconGetRect` and would be worth upstreaming.
-- **Windows tray icon assets are not shipped yet.** Windows needs separate
-  16x16 light and dark `.ico` files; unlike macOS template images they do not
-  auto-invert.
-- **Windows 11 hides new tray icons** in the taskbar overflow by default, so
-  the app is effectively invisible on first run. Needs an onboarding pass.
-- **`lid-gui` cannot be built on macOS**, for the Metal reason above. It is
-  built and linted on Windows by `ci-desktop.yml`, and can be checked from a
-  Mac without pushing — see [Checking the Windows crate from a
-  Mac](#checking-the-windows-crate-from-a-mac).
+- **No Windows installer or code signing.** The zip and `install.ps1` work,
+  but SmartScreen will warn on first launch until the binary is signed.
+- **The Windows executable has no embedded icon.** The window and taskbar use
+  the default until a `.ico` is compiled in as a resource.
+- **Linux notifications need a notification daemon.** Every mainstream
+  desktop runs one; a bare window manager may not, and then they are skipped.
 
 ## Dependency policy
 
-`adabraka-gpui` is pinned with `=0.5.1` and the toolchain with
-`rust-toolchain.toml`. gpui is pre-1.0 and breaks between minor versions, so
+`gpui-kit` is pinned with `=0.6.6` — it in turn pins its `gpui-pre` crates
+exactly — and the toolchain with `rust-toolchain.toml`. gpui is pre-1.0 and breaks between minor versions, so
 nothing there may float. The `objc2` crates the macOS app uses are stable and
 are taken at a caret range like everything else.
 
 ## Development
 
 ```sh
-cargo test  -p lidcore -p lid-macos -p lid-cli   # all three run on macOS
+cargo test  -p lidcore -p lid-macos -p lid-cli -p lid-gui   # all run on macOS
 cargo run   -p lid-macos                         # the menu bar app, unbundled
+cargo run   -p lid-gui                           # the Windows/Linux app, preview backend
 cargo run   -p lid-cli -- agents
 cargo run   -p lid-cli -- status
 ```
@@ -185,11 +224,10 @@ An unbundled macOS build has no bundle identifier, so notifications, Launch at
 Login and the watchdog agent all stand down — everything else works. Run
 `../../scripts/package-macos-app.sh` to exercise those.
 
-### Checking the Windows crate from a Mac
+### Checking the Windows and Linux builds from a Mac
 
-`lid-gui` is the one crate a Mac cannot build, because gpui's macOS backend
-needs the Metal shader compiler from full Xcode. Cross-compiling to the *MSVC*
-target avoids that path entirely — the blocker there is the Windows CRT and SDK
+A Mac build of `lid-gui` compiles none of the Windows or Linux code paths, so
+type-check those targets directly. For Windows the blocker is the CRT and SDK
 headers, which [`cargo-xwin`](https://github.com/rust-cross/cargo-xwin) fetches
 and wires up:
 
@@ -207,9 +245,35 @@ The first run also fetches the Windows CRT and SDK headers into
 `~/Library/Caches/cargo-xwin` (`~/.cache/cargo-xwin` on Linux); later runs reuse them. `lld` is a separate formula these
 days and is *not* needed here — clippy type-checks without linking.
 
-Worth doing before pushing a change to that crate: the Windows job in
-`ci-desktop.yml` is otherwise the only thing that ever type-checks it, and a
-round trip through CI to learn about a typo is a slow way to find one.
+For Linux, a few `-sys` crates compile C. `zig` stands in for a Linux C
+compiler — through a small wrapper, because cc-rs passes a `--target` spelling
+zig does not accept — and fontconfig is loaded at runtime so no Linux sysroot
+is needed:
+
+```sh
+brew install zig
+rustup target add x86_64-unknown-linux-gnu
+
+cat > /tmp/zcc <<'SH'
+#!/bin/sh
+args=""
+for a in "$@"; do case "$a" in --target=*) ;; *) args="$args '$(printf %s "$a" | sed "s/'/'\\\\''/g")'";; esac; done
+eval exec zig cc -target x86_64-linux-gnu $args
+SH
+sed 's/zig cc/zig c++/' /tmp/zcc > /tmp/zcxx
+printf '#!/bin/sh\nexec zig ar "$@"\n' > /tmp/zar
+chmod +x /tmp/zcc /tmp/zcxx /tmp/zar
+
+CC_x86_64_unknown_linux_gnu=/tmp/zcc CXX_x86_64_unknown_linux_gnu=/tmp/zcxx \
+AR_x86_64_unknown_linux_gnu=/tmp/zar RUST_FONTCONFIG_DLOPEN=1 \
+CARGO_TARGET_DIR=target/linux-check \
+cargo clippy -p lid-gui --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
+```
+
+Worth doing before pushing a change to that crate: the `gui` jobs in
+`ci-desktop.yml` are otherwise the only things that build it for its real
+targets, and a round trip through CI to learn about a typo is a slow way to
+find one.
 
 ## Assets
 

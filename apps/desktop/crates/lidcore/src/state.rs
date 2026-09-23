@@ -51,7 +51,7 @@ impl SleepControlState {
         self.ends_at().map(|end| (end - now).max(Duration::zero()))
     }
 
-    /// The one-line status shown in the tray panel and by `close-my-lid status`.
+    /// The one-line status shown by `close-my-lid status`.
     pub fn summary(&self, now: DateTime<Utc>) -> String {
         match self {
             Self::Inactive => "Off — sleeps normally".to_string(),

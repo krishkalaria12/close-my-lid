@@ -2,9 +2,9 @@
 #
 #   irm https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.ps1 | iex
 #
-# Installs the tray app and the `close-my-lid` CLI into
+# Installs the desktop app and the `close-my-lid` CLI into
 # %LOCALAPPDATA%\Programs\CloseMyLid, adds that folder to the user PATH, and
-# creates a Start menu shortcut for the tray app. No administrator rights needed.
+# creates a Start menu shortcut for the desktop app. No administrator rights needed.
 #
 # Environment:
 #   CLOSE_MY_LID_VERSION       release to install, e.g. v0.5.0 (default: latest)
@@ -43,13 +43,13 @@ try {
         throw "$Name.zip does not contain close-my-lid-gui.exe"
     }
 
-    # A running tray app locks its executable. Release any hold through the
+    # A running desktop app locks its executable. Release any hold through the
     # CLI first, so killing the app cannot leave the lid action changed.
     $Running = Get-Process -Name 'close-my-lid-gui' -ErrorAction SilentlyContinue
     if ($Running) {
         $OldCli = Join-Path $InstallDir 'close-my-lid.exe'
         if (Test-Path $OldCli) { try { & $OldCli disable *> $null } catch { } }
-        Write-Host 'Stopping the running tray app'
+        Write-Host 'Stopping the running desktop app'
         $Running | Stop-Process -Force
         Start-Sleep -Seconds 1
     }

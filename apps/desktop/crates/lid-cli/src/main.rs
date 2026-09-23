@@ -1,10 +1,8 @@
 //! `close-my-lid` — the command line interface.
 //!
-//! This is the primary surface on Linux, where a system tray cannot be relied
-//! on: stock GNOME ships no tray without the AppIndicator extension, and
-//! Wayland will not let a client anchor a panel under a tray icon anyway. It
-//! is also available on Windows alongside the tray app, and on macOS alongside
-//! the menu bar app.
+//! What scripts, scheduled tasks and terminals drive, on every platform:
+//! alongside the desktop app on Windows and Linux, and alongside the menu bar
+//! app on macOS.
 //!
 //! The command deliberately blocks while holding on Linux and Windows, in the
 //! same spirit as `systemd-inhibit` and macOS `caffeinate`. On Linux it has
@@ -80,7 +78,7 @@ enum Command {
         json: bool,
     },
     /// Print a systemd user unit for running a hold in the background.
-    /// Linux-only: macOS uses the menu bar app and Windows the tray app.
+    /// Linux-only: macOS uses the menu bar app and Windows the desktop app.
     #[cfg(target_os = "linux")]
     Systemd,
 }
