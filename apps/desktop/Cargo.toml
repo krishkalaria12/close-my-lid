@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/lidcore", "crates/lid-cli", "crates/lid-gui", "crates/lid-macos"]
 
 [workspace.package]
-version = "0.5.1"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.90"
 license = "MIT"
