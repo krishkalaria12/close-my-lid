@@ -135,6 +135,11 @@ fn open_window(state: gpui_kit::Entity<AppState>, minimized: bool, cx: &mut App)
             let handle: gpui_kit::AnyWindowHandle = handle.into();
             if minimized {
                 let _ = handle.update(cx, |_, window, _| window.minimize_window());
+            } else {
+                // Opened from a launcher or a terminal, the window belongs in
+                // front — not behind whatever had focus when it was started.
+                cx.activate(true);
+                let _ = handle.update(cx, |_, window, _| window.activate_window());
             }
             tasks::start(&state, handle, cx);
         }
