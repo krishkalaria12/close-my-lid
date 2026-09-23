@@ -50,6 +50,9 @@ pub fn controller() -> SleepSessionController {
 /// (`agents`, `settings`) and optionally a running hold (`holding` for an
 /// unlimited one, `holding-1h` for a timed one), comma-separated. For looking
 /// at states that otherwise need clicking through, from a script.
+///
+/// `ctrl` labels shortcuts `Ctrl+…` as Windows and Linux do, for screenshots
+/// of what those platforms show.
 pub struct Scene {
     pub page: Option<crate::shell::Page>,
     pub hold: Option<lidcore::SessionDuration>,
@@ -74,4 +77,14 @@ pub fn scene() -> Scene {
         }
     }
     scene
+}
+
+/// Whether the preview asked for Windows and Linux shortcut labels.
+pub fn pc_shortcuts() -> bool {
+    static CTRL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *CTRL.get_or_init(|| {
+        ACTIVE
+            && std::env::var("CLOSE_MY_LID_PREVIEW")
+                .is_ok_and(|raw| raw.split(',').any(|part| part.trim() == "ctrl"))
+    })
 }

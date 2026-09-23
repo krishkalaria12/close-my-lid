@@ -166,6 +166,7 @@ lock, or the files the installed menu bar app reads.
 cargo run -p lid-gui                                       # the app, on a Mac
 CLOSE_MY_LID_PREVIEW=holding-1h cargo run -p lid-gui       # with a hold running
 CLOSE_MY_LID_PREVIEW=agents cargo run -p lid-gui           # or: settings, holding
+CLOSE_MY_LID_PREVIEW=holding-1h,ctrl cargo run -p lid-gui  # Ctrl+ shortcut labels, for screenshots
 ```
 
 ## Why `enable` blocks

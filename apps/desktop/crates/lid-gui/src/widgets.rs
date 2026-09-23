@@ -233,7 +233,7 @@ pub fn meter(fraction: f32, color: Hsla, height: f32, p: &Palette) -> Div {
 
 /// How a keyboard shortcut is written on this platform.
 pub fn shortcut(key: &str) -> SharedString {
-    if cfg!(target_os = "macos") {
+    if cfg!(target_os = "macos") && !crate::preview::pc_shortcuts() {
         format!("⌘{key}").into()
     } else {
         format!("Ctrl+{key}").into()
