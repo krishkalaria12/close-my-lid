@@ -25,9 +25,9 @@ What does still matter is *where* an item points. The app refuses to open an enc
 ## Publish an update
 
 The three artifacts are built by `.github/workflows/release.yml`, each on its
-own operating system's runner. Nothing is cross-compiled: the Windows tray app
-links against the Windows SDK through gpui, the Linux CLI links against the
-host's glibc, and the macOS bundle needs `lipo`, `codesign` and the AppKit SDK.
+own operating system's runner. Nothing is cross-compiled: the Windows desktop
+app links against the Windows SDK through gpui, the Linux desktop app links
+against the host's glibc, fontconfig and Wayland/X11 libraries, and the macOS bundle needs `lipo`, `codesign` and the AppKit SDK.
 A release cut from one developer machine could only ever ship one third of the
 product.
 
@@ -54,7 +54,7 @@ git push origin main v<version>
    | asset | built on | contents |
    |---|---|---|
    | `Close-My-Lid-v<version>-macOS.zip` | `macos-15` | universal `Close My Lid.app` |
-   | `close-my-lid-v<version>-linux-x86_64.tar.gz` | `ubuntu-latest` | `close-my-lid` CLI |
+   | `close-my-lid-v<version>-linux-x86_64.tar.gz` | `ubuntu-latest` | `close-my-lid`, `close-my-lid-gui`, desktop entry and icon |
    | `Close-My-Lid-v<version>-windows-x86_64.zip` | `windows-latest` | `close-my-lid.exe`, `close-my-lid-gui.exe` |
 
    The macOS name is fixed: `scripts/update-homebrew-tap.rb` refuses any other

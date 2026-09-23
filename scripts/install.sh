@@ -5,7 +5,8 @@
 #
 # macOS: installs `Close My Lid.app` into /Applications (or ~/Applications when
 # /Applications is not writable) and links the `close-my-lid` command.
-# Linux: installs the `close-my-lid` CLI.
+# Linux: installs the `close-my-lid` CLI and, from releases that ship it, the
+# Close My Lid desktop app with an entry in the application menu.
 #
 # Environment:
 #   CLOSE_MY_LID_VERSION      release to install, e.g. v0.5.0 (default: latest)
@@ -119,11 +120,41 @@ install_linux() {
   chmod 755 "$BIN_DIR/.close-my-lid.new"
   mv -f "$BIN_DIR/.close-my-lid.new" "$BIN_DIR/close-my-lid"
 
+  # Releases before the desktop app shipped only the CLI.
+  if [ -f "$TMP/$name/close-my-lid-gui" ]; then
+    install_linux_app "$TMP/$name"
+  fi
+
   say ""
   say "Installed close-my-lid $TAG to $BIN_DIR/close-my-lid"
   path_hint
   say "Try: close-my-lid enable --for 2h"
   say "Run it in the background with: close-my-lid systemd"
+}
+
+# The desktop app, its icon, and a menu entry, all under the user's own data
+# directory so no root is needed.
+install_linux_app() {
+  src="$1"
+  data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
+  desktop_id="com.krishkalaria.close-my-lid"
+
+  cp "$src/close-my-lid-gui" "$BIN_DIR/.close-my-lid-gui.new"
+  chmod 755 "$BIN_DIR/.close-my-lid-gui.new"
+  mv -f "$BIN_DIR/.close-my-lid-gui.new" "$BIN_DIR/close-my-lid-gui"
+
+  mkdir -p "$data_dir/icons/hicolor/256x256/apps" "$data_dir/applications"
+  cp "$src/close-my-lid.png" "$data_dir/icons/hicolor/256x256/apps/close-my-lid.png"
+  # Exec is an absolute path: ~/.local/bin is not on every desktop session's
+  # PATH, even when it is on the shell's.
+  sed "s|@EXEC@|$BIN_DIR/close-my-lid-gui|" "$src/$desktop_id.desktop" \
+    > "$data_dir/applications/$desktop_id.desktop"
+  if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$data_dir/applications" >/dev/null 2>&1 || true
+  fi
+
+  say "Installed the Close My Lid app to $BIN_DIR/close-my-lid-gui"
+  say "Open it from your application menu, or run: close-my-lid-gui"
 }
 
 TAG="$(resolve_version)"

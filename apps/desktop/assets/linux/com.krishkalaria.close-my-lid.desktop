@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Close My Lid
+GenericName=Lid Sleep Control
+Comment=Keep your laptop awake with the lid closed
+Exec=@EXEC@
+Icon=close-my-lid
+Terminal=false
+Categories=Utility;System;
+Keywords=sleep;lid;awake;caffeine;inhibit;agents;
+StartupNotify=true
+StartupWMClass=com.krishkalaria.close-my-lid

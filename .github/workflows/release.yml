@@ -3,8 +3,9 @@ name: release
 # Builds the shipped artifact for each operating system on that operating
 # system's own runner and attaches it to the tag's GitHub Release.
 #
-# Nothing here is cross-compiled. The Windows tray app links against the
-# Windows SDK through gpui, the Linux CLI links against the host's glibc, and
+# Nothing here is cross-compiled. The Windows desktop app links against the
+# Windows SDK through gpui, the Linux build links against the host's glibc,
+# fontconfig and Wayland/X11 libraries, and
 # the macOS bundle needs `lipo`, `codesign` and the AppKit SDK — so a release
 # cut from one developer machine could only ever ship one third of the product.
 #
@@ -172,9 +173,18 @@ jobs:
         with:
           workspaces: apps/desktop
 
-      - name: Build the CLI
+      # gpui's Linux backend links fontconfig and freetype for text, and
+      # xkbcommon, Wayland and X11 for windows and input.
+      - name: Install the Linux GUI libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfontconfig-dev libfreetype-dev libwayland-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev
+
+      - name: Build the CLI and the desktop app
         working-directory: apps/desktop
-        run: cargo build --release -p lid-cli
+        run: cargo build --release -p lid-cli -p lid-gui
 
       # `enable` and `disable` take a logind inhibitor and are not exercised
       # here; these two need no session bus and no privileges.
@@ -184,7 +194,9 @@ jobs:
           ./target/release/close-my-lid --version
           ./target/release/close-my-lid agents --json
 
-      - name: Archive the CLI
+      # The desktop entry and icon ride along so `install.sh` can put the app
+      # in the application menu.
+      - name: Archive the Linux binaries
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
@@ -192,6 +204,9 @@ jobs:
           name="close-my-lid-v${VERSION}-linux-x86_64"
           mkdir -p "stage/${name}"
           install -m 755 apps/desktop/target/release/close-my-lid "stage/${name}/close-my-lid"
+          install -m 755 apps/desktop/target/release/close-my-lid-gui "stage/${name}/close-my-lid-gui"
+          install -m 644 apps/desktop/assets/linux/com.krishkalaria.close-my-lid.desktop "stage/${name}/"
+          install -m 644 apps/desktop/assets/AppIcon.iconset/icon_256x256.png "stage/${name}/close-my-lid.png"
           install -m 644 LICENSE "stage/${name}/LICENSE"
           install -m 644 apps/desktop/README.md "stage/${name}/README.md"
           tar -czf "${name}.tar.gz" -C stage "${name}"
@@ -224,9 +239,9 @@ jobs:
         with:
           workspaces: apps/desktop
 
-      # Both surfaces ship on Windows: the tray app is the product, the CLI is
-      # what scripts and scheduled tasks drive.
-      - name: Build the CLI and the tray app
+      # Both surfaces ship on Windows: the desktop app is the product, the CLI
+      # is what scripts and scheduled tasks drive.
+      - name: Build the CLI and the desktop app
         working-directory: apps/desktop
         run: cargo build --release -p lid-cli -p lid-gui
 
