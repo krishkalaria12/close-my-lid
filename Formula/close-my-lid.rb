@@ -3,7 +3,7 @@ class CloseMyLid < Formula
   homepage "https://github.com/krishkalaria12/close-my-lid"
   url "https://github.com/krishkalaria12/close-my-lid/archive/refs/tags/v0.6.0.tar.gz"
   version "0.6.0"
-  sha256 "cd3f17afc781679e95ea308cc3c3b9e52afa3bc55c5fbfceb63da340e092b8f4"
+  sha256 "bc32f76f31954053ad9254a651138c58729b1269fdc026bd6b4e63dcf335bebc"
   license "MIT"
 
   depends_on "rust" => :build
