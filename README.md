@@ -6,16 +6,41 @@ It runs on macOS, Linux and Windows. It ships as a native macOS menu bar app, a 
 
 The whole desktop side is one Rust workspace: a shared `lidcore` crate holds the session state machine, persistence, agent detection and the per-OS lid mechanism, and each platform's interface is a thin shell over it.
 
+## Download
+
+Every platform gets an app. Download the one for your system from the
+[latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest),
+or use the one-line installer below it.
+
+| System | App | Download |
+|---|---|---|
+| macOS 14+ (Apple silicon and Intel) | Menu bar app, which is also the `close-my-lid` command | [Close-My-Lid-v0.6.0-macOS.zip](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.0/Close-My-Lid-v0.6.0-macOS.zip) |
+| Windows 10/11 (x64) | Desktop app and `close-my-lid` CLI | [Close-My-Lid-v0.6.0-windows-x86_64.zip](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.0/Close-My-Lid-v0.6.0-windows-x86_64.zip) |
+| Linux (x86_64) | Desktop app and `close-my-lid` CLI | [close-my-lid-v0.6.0-linux-x86_64.tar.gz](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.0/close-my-lid-v0.6.0-linux-x86_64.tar.gz) |
+
+Quickest install, one line per platform:
+
+```sh
+# macOS
+brew install --cask krishkalaria12/close-my-lid/close-my-lid
+```
+
+```sh
+# Linux: the desktop app, the CLI, and an application menu entry
+curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell): the desktop app, the CLI, and a Start menu shortcut
+irm https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.ps1 | iex
+```
+
+Then open **Close My Lid**: from the menu bar on macOS, the Start menu on
+Windows, or the application menu on Linux.
+
 ## Install
 
-Every [release](https://github.com/krishkalaria12/close-my-lid/releases/latest)
-ships a build for each platform:
-
-| OS | What you get | Release asset |
-|---|---|---|
-| macOS 14+ (Apple silicon and Intel) | Menu bar app, which is also the `close-my-lid` command | `Close-My-Lid-vX.Y.Z-macOS.zip` |
-| Linux (x86_64) | Desktop app and `close-my-lid` CLI | `close-my-lid-vX.Y.Z-linux-x86_64.tar.gz` |
-| Windows 10/11 (x64) | Desktop app and `close-my-lid` CLI | `Close-My-Lid-vX.Y.Z-windows-x86_64.zip` |
+Each platform in detail, including manual installs.
 
 ### macOS
 
@@ -63,22 +88,41 @@ curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/sc
 ```
 
 **Manual.** Download `close-my-lid-vX.Y.Z-linux-x86_64.tar.gz` from the
-[latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest)
-and put the binaries on your `PATH`:
+[latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest).
+It holds the desktop app (`close-my-lid-gui`), the CLI (`close-my-lid`), a
+desktop entry and an icon. Put the binaries on your `PATH`:
 
 ```sh
 tar -xzf close-my-lid-v*-linux-x86_64.tar.gz
-install -m 755 close-my-lid-v*-linux-x86_64/close-my-lid ~/.local/bin/close-my-lid
-install -m 755 close-my-lid-v*-linux-x86_64/close-my-lid-gui ~/.local/bin/close-my-lid-gui
+cd close-my-lid-v*-linux-x86_64
+install -m 755 close-my-lid close-my-lid-gui ~/.local/bin/
 ```
 
-The archive also carries a `.desktop` entry and an icon; the install script
-puts those in your application menu for you.
+Then run `close-my-lid-gui` to open the app. To add it to your application
+menu as well:
+
+```sh
+install -Dm 644 close-my-lid.png ~/.local/share/icons/hicolor/256x256/apps/close-my-lid.png
+sed "s|@EXEC@|$HOME/.local/bin/close-my-lid-gui|" com.krishkalaria.close-my-lid.desktop \
+  > ~/.local/share/applications/com.krishkalaria.close-my-lid.desktop
+```
+
+The app needs no administrator rights. It holds the lid through a logind
+inhibitor, which ships with systemd on every mainstream distribution.
 
 **From source** (any architecture, needs Rust):
 
 ```sh
-cargo install --git https://github.com/krishkalaria12/close-my-lid lid-cli
+cargo install --git https://github.com/krishkalaria12/close-my-lid lid-cli   # the CLI
+cargo install --git https://github.com/krishkalaria12/close-my-lid lid-gui   # the desktop app
+```
+
+Building the desktop app needs the fontconfig, freetype, Wayland, xkbcommon and
+X11 development packages; on Debian and Ubuntu:
+
+```sh
+sudo apt install libfontconfig-dev libfreetype-dev libwayland-dev \
+  libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev
 ```
 
 Open **Close My Lid** from your application menu, or from a terminal run
@@ -96,9 +140,12 @@ irm https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/i
 ```
 
 **Manual.** Download `Close-My-Lid-vX.Y.Z-windows-x86_64.zip` from the
-[latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest),
-extract it anywhere, and run `close-my-lid-gui.exe` for the desktop app or
-`close-my-lid.exe` from a terminal.
+[latest release](https://github.com/krishkalaria12/close-my-lid/releases/latest)
+and extract it anywhere. Double-click `close-my-lid-gui.exe` to open the
+desktop app; `close-my-lid.exe` is the CLI, for a terminal.
+
+The executables are not code-signed yet, so the first launch may show a
+SmartScreen warning. Choose **More info**, then **Run anyway**.
 
 ### Install script options
 

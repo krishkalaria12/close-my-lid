@@ -36,8 +36,8 @@ product.
    binary's own `--version`, `CFBundleVersion` (`0.5.0` → `5000`) and the feed
    comparison all read it. Run `cargo update -w` from `apps/desktop` so
    `Cargo.lock` follows, and bump the copies in `package.json`,
-   `apps/web/package.json`, `apps/web/src/data/site.ts`, the release link in
-   `README.md`, and `version` (plus the tag in the formula's `url`) in
+   `apps/web/package.json`, `apps/web/src/data/site.ts`, the download links
+   and release examples in `README.md`, and `version` (plus the tag in the formula's `url`) in
    `Formula/close-my-lid.rb` and `Casks/close-my-lid.rb`. The two checksums in
    those files cannot be known yet; they are step 5.
 
