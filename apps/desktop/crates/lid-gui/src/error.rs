@@ -1,9 +1,9 @@
-//! Every error the tray app can produce.
+//! Every error the desktop app can produce.
 //!
-//! A tray app has nowhere obvious to print a failure, so errors here are built
-//! to be *displayed*: [`GuiError::headline`] gives the one line that fits in
-//! the panel, and the hint carries the rest. Nothing is reported with a bare
-//! `String`, so the panel can style refusals differently from bugs.
+//! A windowed app has no console to print a failure to, so errors here are
+//! built to be *displayed*: [`GuiError::headline`] gives the one line that fits
+//! in the panel's banner, and the hint carries the rest. Nothing is reported
+//! with a bare `String`, so the panel can style refusals differently from bugs.
 
 use lidcore::LidError;
 
@@ -22,17 +22,29 @@ pub enum GuiError {
         source: LidError,
     },
 
-    #[error("could not open the panel window")]
+    #[error("could not open the window: {detail}")]
     Window { detail: String },
+
+    #[error("could not read the update feed: {detail}")]
+    UpdateFeed { detail: String },
+
+    #[error("could not change launch at login: {detail}")]
+    LoginItem { detail: String },
+
+    #[error("could not save settings: {detail}")]
+    Settings { detail: String },
 }
 
 impl GuiError {
-    /// Short enough for the panel's error row.
+    /// Short enough for the panel's banner.
     pub fn headline(&self) -> String {
         match self {
-            Self::Lid(error) => error.to_string(),
+            Self::Lid(error) => capitalise(&error.to_string()),
             Self::NoBackend { .. } => "Lid control unavailable".to_string(),
-            Self::Window { .. } => "Could not open the panel".to_string(),
+            Self::Window { .. } => "Could not open the window".to_string(),
+            Self::UpdateFeed { .. } => "Could not check for updates".to_string(),
+            Self::LoginItem { .. } => "Could not change launch at login".to_string(),
+            Self::Settings { .. } => "Could not save settings".to_string(),
         }
     }
 
@@ -41,18 +53,21 @@ impl GuiError {
         match self {
             Self::Lid(error) => error.hint(),
             Self::NoBackend { source } => source.hint(),
-            Self::Window { .. } => None,
+            Self::UpdateFeed { .. } => Some("Check your connection and try again."),
+            Self::LoginItem { detail } | Self::Settings { detail } | Self::Window { detail } => {
+                Some(detail)
+            }
         }
     }
+}
 
-    /// Whether the failure is worth interrupting the user with a notification,
-    /// as opposed to only showing in the panel. Refusals are; transient bus
-    /// problems are not, because they usually resolve on the next attempt.
-    pub fn deserves_notification(&self) -> bool {
-        match self {
-            Self::Lid(error) | Self::NoBackend { source: error } => !error.is_transient(),
-            Self::Window { .. } => false,
-        }
+/// Core errors are written as sentence fragments for the CLI's `error: …`
+/// prefix; the banner shows them on their own.
+fn capitalise(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
     }
 }
 
@@ -61,7 +76,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn headlines_stay_short_enough_for_the_panel() {
+    fn headlines_stay_short_enough_for_the_banner() {
         let error = GuiError::NoBackend {
             source: LidError::UnsupportedPlatform { os: "macos" },
         };
@@ -70,18 +85,19 @@ mod tests {
 
     #[test]
     fn hints_pass_through_from_the_core() {
+        let expected = LidError::UnsupportedPlatform { os: "macos" }
+            .hint()
+            .map(str::to_owned);
         let error = GuiError::NoBackend {
             source: LidError::UnsupportedPlatform { os: "macos" },
         };
-        assert!(error.hint().unwrap().contains("menu bar app"));
+        assert!(expected.is_some());
+        assert_eq!(error.hint().map(str::to_owned), expected);
     }
 
     #[test]
-    fn transient_bus_failures_do_not_raise_a_notification() {
-        let transient = GuiError::Lid(LidError::bus("no socket"));
-        let refusal = GuiError::Lid(LidError::denied("hold the lid", "no"));
-
-        assert!(!transient.deserves_notification());
-        assert!(refusal.deserves_notification());
+    fn core_messages_read_as_sentences_in_the_banner() {
+        assert_eq!(capitalise("could not hold"), "Could not hold");
+        assert_eq!(capitalise(""), "");
     }
 }

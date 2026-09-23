@@ -67,9 +67,23 @@ zbus = "5.19.0"
 # Windows: power scheme (LIDACTION) + execution state.
 windows = "0.62.2"
 
-# Windows GUI. Fork of Zed's GPUI that adds tray, notifications and daemon mode.
-# Pinned exactly: gpui is pre-1.0 and breaks between minor versions.
-adabraka-gpui = "=0.5.1"
+# Windows and Linux GUI: gpui (published as `gpui-pre`) plus the gpui-component
+# library, behind one facade crate. Pinned exactly: gpui is pre-1.0 and breaks
+# between minor versions.
+gpui-kit = "=0.6.6"
+
+# Windows and Linux GUI: toasts on Windows, the freedesktop notification
+# service over D-Bus on Linux. The Linux side is zbus 5, the same bus stack
+# `lidcore` already uses for logind.
+notify-rust = "4.18.0"
+
+# Windows and Linux GUI: the Run key and an XDG autostart entry, for launch at
+# login.
+auto-launch = "0.6.0"
+
+# Windows and Linux GUI: fetches the appcast. Desktop gpui ships no HTTP
+# client of its own, and one blocking GET every six hours needs no runtime.
+ureq = "3.4.2"
 
 [profile.release]
 lto = true

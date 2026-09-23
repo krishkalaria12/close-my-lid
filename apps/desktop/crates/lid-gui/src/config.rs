@@ -1,8 +1,9 @@
-//! Tray app configuration.
+//! Desktop app configuration.
 //!
-//! Shared values live in `lidcore::config` so the CLI and the tray app cannot
-//! drift apart. Only window geometry and tray wiring belong here. Colours stay
-//! in `theme.rs`, which is about appearance rather than configuration.
+//! Shared values live in `lidcore::config` so the CLI and the app cannot drift
+//! apart. Only window geometry, cadences and well-known links belong here.
+//! Colours stay in `theme.rs`, which is about appearance rather than
+//! configuration.
 
 use std::time::Duration;
 
@@ -10,27 +11,44 @@ use std::time::Duration;
 /// the CLI so both supervise at the same cadence.
 pub const SUPERVISION_INTERVAL: Duration = lidcore::config::SUPERVISION_INTERVAL;
 
-/// Panel width. Narrower than the macOS panel's 300pt because Windows system
-/// fonts run wider at the same point size.
-pub const PANEL_WIDTH: f32 = 320.0;
+/// How often the countdown re-renders while a hold runs.
+pub const CLOCK_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Panel height. Fixed rather than fitted: the agent list has a constant row
-/// count, so the panel never needs to resize.
-pub const PANEL_HEIGHT: f32 = 460.0;
+/// How often battery and agent readouts refresh while the window has focus.
+/// Matches the macOS panel's refresh while it is open.
+pub const READOUT_INTERVAL: Duration = Duration::from_secs(5);
 
-/// Gap between the panel and the screen edge.
-pub const PANEL_MARGIN: f32 = 12.0;
+/// How often they refresh while the window is in the background. The process
+/// walk is the expensive part, and nobody is reading it closely then.
+pub const BACKGROUND_READOUT_INTERVAL: Duration = Duration::from_secs(30);
 
-/// Extra bottom inset so the panel clears a standard Windows taskbar when the
-/// tray icon's real position is unavailable.
-pub const TASKBAR_INSET: f32 = PANEL_MARGIN * 4.0;
+/// The first update check waits for the window to settle, as on macOS.
+pub const FIRST_UPDATE_CHECK: Duration = Duration::from_secs(2);
 
-/// Tray menu item identifiers. Kept here so the menu definition and its
-/// handler cannot disagree about a string literal.
-pub mod action {
-    pub const PANEL: &str = "panel";
-    pub const STOP: &str = "stop";
-    pub const QUIT: &str = "quit";
-    /// Prefix for the duration presets, e.g. `hold:1 hour`.
-    pub const HOLD_PREFIX: &str = "hold:";
-}
+/// How often the appcast is re-read after that.
+pub const UPDATE_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// How long "Up to date" stays on the updates row after a manual check.
+pub const UPDATE_RESULT_LINGER: Duration = Duration::from_secs(4);
+
+/// The size the window opens at: room for the sidebar and a comfortable
+/// reading width beside it.
+pub const WINDOW_WIDTH: f32 = 940.0;
+pub const WINDOW_HEIGHT: f32 = 660.0;
+
+/// Below this the sidebar and the Overview cards stop fitting side by side.
+pub const WINDOW_MIN_WIDTH: f32 = 780.0;
+pub const WINDOW_MIN_HEIGHT: f32 = 520.0;
+
+/// Space kept between a small display's edges and the window.
+pub const DISPLAY_MARGIN: f32 = 48.0;
+
+/// Passed by the login item, so a launch at sign-in starts minimised instead
+/// of putting a window in front of whatever the user opens first.
+pub const MINIMIZED_ARG: &str = "--minimized";
+
+/// Where "Release Notes" and an available update point.
+pub const RELEASES_URL: &str = "https://github.com/krishkalaria12/close-my-lid/releases";
+
+/// Where "Report an Issue" points.
+pub const ISSUES_URL: &str = "https://github.com/krishkalaria12/close-my-lid/issues/new";

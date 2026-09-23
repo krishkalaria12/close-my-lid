@@ -1,12 +1,13 @@
-//! Close My Lid tray app for Windows.
+//! Close My Lid for Windows and Linux.
 //!
-//! Built on adabraka-gpui, a fork of Zed's GPUI that adds the tray,
-//! notification and daemon-mode APIs GPUI itself does not provide. The version
-//! is pinned exactly because gpui is pre-1.0 and breaks between minor
-//! releases; see `apps/desktop/README.md`.
+//! A desktop app over the same core as the macOS menu bar app: start and stop
+//! a hold, watch the battery and the running agents, and change settings.
+//! Built on gpui-kit — Zed's GPUI plus the
+//! gpui-component library — which is pinned exactly because gpui is pre-1.0
+//! and breaks between minor releases; see `apps/desktop/README.md`.
 //!
-//! macOS has its own AppKit app in the `lid-macos` crate; both are shells over
-//! the same `lidcore`.
+//! macOS has its own AppKit app in the `lid-macos` crate. This one also builds
+//! and runs there, which is only for working on the interface from a Mac.
 //!
 //! Hides the console window on Windows release builds.
 #![cfg_attr(
@@ -14,32 +15,29 @@
     windows_subsystem = "windows"
 )]
 
-// The tray app is Windows-only. Linux has no tray to anchor to — the CLI is
-// the product there — and macOS has `lid-macos`. `Cargo.toml` intentionally
-// provides no gpui dependency for either, so fail here with a clear message
-// instead of a wall of missing-crate errors.
-#[cfg(not(target_os = "windows"))]
-compile_error!(
-    "lid-gui is Windows-only; use `lid-macos` on macOS and the `close-my-lid` CLI on Linux"
-);
-
-mod anchor;
+mod agent_list;
 mod config;
 mod error;
-mod panel;
+mod icons;
+mod overview;
+mod prefs;
+mod preview;
+mod settings;
+mod shell;
 mod state;
+mod system;
+mod tasks;
 mod theme;
+mod updates;
+mod widgets;
 
-use gpui::single_instance::{SingleInstance, send_activate_to_existing};
-use gpui::{
-    AnyWindowHandle, App, AppContext, Application, Bounds, Entity, TitlebarOptions, TrayIconEvent,
-    TrayMenuItem, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, px,
-    size,
+use gpui_kit::component::{Root, TitleBar};
+use gpui_kit::{
+    App, AppContext, Bounds, KeyBinding, Size, Window, WindowBounds, WindowOptions, px, size,
 };
-use lidcore::{APP_ID, APP_NAME, SessionDuration};
+use lidcore::APP_ID;
 
-use crate::config::action;
-use crate::panel::Panel;
+use crate::shell::{KEY_CONTEXT, Quit, Shell, ShowAgents, ShowOverview, ShowSettings, ToggleHold};
 use crate::state::AppState;
 
 fn main() {
@@ -49,255 +47,122 @@ fn main() {
         )
         .init();
 
-    // A second hold would fight the first over the same global power setting,
-    // so only one instance may run.
-    let _instance = match SingleInstance::acquire(APP_ID) {
-        Ok(instance) => instance,
-        Err(_) => {
-            let _ = send_activate_to_existing(APP_ID);
-            return;
-        }
+    // Held until the process exits; see `InstanceGuard`.
+    let Some(_instance) = system::claim_single_instance() else {
+        system::notify("Close My Lid is already running.");
+        return;
     };
 
-    Application::new().run(|cx: &mut App| {
-        // The app is a tray app: it must outlive its windows.
-        cx.set_keep_alive_without_windows(true);
+    let minimized = std::env::args().any(|arg| arg == config::MINIMIZED_ARG);
 
-        let state = cx.new(|_| AppState::new());
+    gpui_kit::application()
+        .with_assets(gpui_kit::assets::Assets)
+        .run(move |cx: &mut App| {
+            gpui_kit::init(cx);
+            bind_keys(cx);
 
-        setup_tray(cx);
-        wire_tray_actions(state.clone(), cx);
-        start_supervisor(state.clone(), cx);
-    });
-}
+            let state = cx.new(|_| AppState::new());
 
-fn setup_tray(cx: &mut App) {
-    cx.set_tray_tooltip(APP_NAME);
+            // The last line of defence: whatever ends the app — the window's
+            // close button, the OS asking at sign-out — releases the hold
+            // first. Quitting from the app does this itself; releasing twice
+            // is a no-op.
+            let on_quit = state.clone();
+            cx.on_app_quit(move |cx| {
+                on_quit.update(cx, |state, _| state.release_for_quit());
+                async {}
+            })
+            .detach();
 
-    // On Windows the icon lands in the taskbar overflow by default, so most
-    // users will not see it until they pin it. Worth surfacing in onboarding.
-    // TODO: ship 16x16 light and dark .ico assets and pass them here; unlike
-    // macOS template images, Windows does not auto-invert for the taskbar theme.
-    cx.set_tray_icon(None);
-
-    // Clicking the icon should open the panel rather than the context menu.
-    // Not yet implemented on the Windows backend in 0.5.1, so the menu below
-    // remains the reliable path.
-    cx.set_tray_panel_mode(true);
-
-    let mut items = vec![
-        TrayMenuItem::Action {
-            label: "Open Panel".into(),
-            id: action::PANEL.into(),
-        },
-        TrayMenuItem::Separator,
-    ];
-    for duration in SessionDuration::PRESETS {
-        items.push(TrayMenuItem::Action {
-            label: format!("Hold for {}", duration.label()).into(),
-            id: format!("{}{}", action::HOLD_PREFIX, duration.label()).into(),
+            open_window(state, minimized, cx);
         });
-    }
-    items.push(TrayMenuItem::Separator);
-    items.push(TrayMenuItem::Action {
-        label: "Stop Holding".into(),
-        id: action::STOP.into(),
-    });
-    items.push(TrayMenuItem::Separator);
-    items.push(TrayMenuItem::Action {
-        label: "Quit".into(),
-        id: action::QUIT.into(),
-    });
-
-    cx.set_tray_menu(items);
 }
 
-fn wire_tray_actions(state: Entity<AppState>, cx: &mut App) {
-    let panel_state = state.clone();
-    cx.on_tray_icon_event(move |event, cx| {
-        // Toggle, not open. A click used to open a panel unconditionally, which
-        // both stacked duplicates and left the user no way to put one away —
-        // nothing in this app ever closed the window.
-        if matches!(event, TrayIconEvent::LeftClick) {
-            toggle_panel(panel_state.clone(), cx);
-        }
-    });
-
-    cx.on_tray_menu_action(move |id, cx| match id.as_ref() {
-        // The menu item is named "Open Panel", so it opens rather than toggles.
-        action::PANEL => show_panel(state.clone(), cx),
-        action::STOP => {
-            let headline: Option<String> = state.update(cx, |state, cx| {
-                if let Err(error) = state.stop() {
-                    tracing::error!(%error, hint = error.hint(), "could not stop the hold");
-                    cx.notify();
-                    return error.deserves_notification().then(|| error.headline());
-                }
-                cx.notify();
-                None
-            });
-            // Release builds hide the console, so refusals must surface as a
-            // notification — otherwise the click silently does nothing.
-            if let Some(headline) = headline {
-                let _ = cx.show_notification(APP_NAME, &headline);
-            }
-        }
-        action::QUIT => {
-            // Release before exiting; on Windows the power-scheme edit would
-            // otherwise outlive the process.
-            state.update(cx, |state, _| {
-                let _ = state.stop();
-            });
-            cx.quit();
-        }
-        other => {
-            let Some(label) = other.strip_prefix(action::HOLD_PREFIX) else {
-                return;
-            };
-            let Some(duration) = SessionDuration::PRESETS
-                .into_iter()
-                .find(|preset| preset.label() == label)
-            else {
-                return;
-            };
-            let headline: Option<String> = state.update(cx, |state, cx| {
-                if let Err(error) = state.start(duration) {
-                    tracing::error!(%error, hint = error.hint(), "could not start the hold");
-                    cx.notify();
-                    return error.deserves_notification().then(|| error.headline());
-                }
-                cx.notify();
-                None
-            });
-            if let Some(headline) = headline {
-                let _ = cx.show_notification(APP_NAME, &headline);
-            }
-        }
-    });
+fn bind_keys(cx: &mut App) {
+    let context = Some(KEY_CONTEXT);
+    cx.bind_keys([
+        // `secondary` is Ctrl on Windows and Linux, Command on macOS.
+        KeyBinding::new("secondary-q", Quit, context),
+        KeyBinding::new("secondary-enter", ToggleHold, context),
+        KeyBinding::new("secondary-1", ShowOverview, context),
+        KeyBinding::new("secondary-2", ShowAgents, context),
+        KeyBinding::new("secondary-,", ShowSettings, context),
+    ]);
 }
 
-/// The panel window this app opened, if it is still on screen.
-///
-/// An `AnyWindowHandle` outlives its window, so the stored handle is probed
-/// rather than trusted: `update` fails exactly when the window is gone, which is
-/// also how a window the user closed from the OS gets forgotten here.
-fn live_panel(state: &Entity<AppState>, cx: &mut App) -> Option<AnyWindowHandle> {
-    let handle = state.read(cx).panel?;
-    if handle.update(cx, |_, _, _| ()).is_ok() {
-        return Some(handle);
-    }
-    state.update(cx, |state, _| state.panel = None);
-    None
-}
-
-/// Opens the panel, or brings the open one forward.
-fn show_panel(state: Entity<AppState>, cx: &mut App) {
-    if let Some(handle) = live_panel(&state, cx) {
-        let _ = handle.update(cx, |_, window, _| window.activate_window());
-        refresh_for_panel(&state, cx);
-        return;
-    }
-    open_panel(state, cx);
-}
-
-/// Opens the panel if it is closed, and closes it if it is open — what a tray
-/// icon click does everywhere else.
-fn toggle_panel(state: Entity<AppState>, cx: &mut App) {
-    if let Some(handle) = live_panel(&state, cx) {
-        let _ = handle.update(cx, |_, window, _| window.remove_window());
-        state.update(cx, |state, _| state.panel = None);
-        return;
-    }
-    open_panel(state, cx);
-}
-
-/// Scan for agents only when the panel is about to be shown, so the process
-/// walk never runs for a UI nobody can see.
-fn refresh_for_panel(state: &Entity<AppState>, cx: &mut App) {
-    state.update(cx, |state, cx| {
-        state.refresh_readouts();
-        cx.notify();
-    });
-}
-
-fn open_panel(state: Entity<AppState>, cx: &mut App) {
-    refresh_for_panel(&state, cx);
-
-    let bounds: Bounds<_> =
-        anchor::panel_bounds(size(px(config::PANEL_WIDTH), px(config::PANEL_HEIGHT)), cx);
-
+fn open_window(state: gpui_kit::Entity<AppState>, minimized: bool, cx: &mut App) {
     let options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(bounds)),
-        kind: WindowKind::PopUp,
-        titlebar: None::<TitlebarOptions>,
-        focus: true,
-        show: true,
-        is_movable: false,
-        window_background: WindowBackgroundAppearance::Transparent,
-        ..Default::default()
+        window_bounds: Some(WindowBounds::Windowed(window_bounds(cx))),
+        window_min_size: Some(size(
+            px(config::WINDOW_MIN_WIDTH),
+            px(config::WINDOW_MIN_HEIGHT),
+        )),
+        app_id: Some(APP_ID.to_string()),
+        ..TitleBar::window_options()
     };
 
-    // Bound before the match rather than used as its scrutinee: the arms need
-    // `cx` again, and a scrutinee's borrow of it lives until the match ends.
-    let opened = cx.open_window(options, |_window: &mut Window, cx| {
-        cx.new(|cx| Panel::new(state.clone(), cx))
+    let opened = cx.open_window(options, |window: &mut Window, cx| {
+        // gpui-component starts in its light theme; follow the system instead,
+        // now and whenever it changes.
+        theme::sync(window, cx);
+        window.observe_window_appearance(theme::sync).detach();
+
+        // The close button quits, and quitting releases the hold: an app
+        // that held the lid with no window left to show it would be a hold
+        // nobody could see or stop.
+        let on_close = state.clone();
+        window.on_window_should_close(cx, move |_, cx| {
+            tasks::quit(&on_close, cx);
+            true
+        });
+
+        let scene = preview::scene();
+        if let Some(duration) = scene.hold {
+            state.update(cx, |state, _| state.select_and_start(duration));
+        }
+        let shell = cx.new(|cx| {
+            let mut shell = Shell::new(state.clone(), window, cx);
+            if let Some(page) = scene.page {
+                shell.show(page, cx);
+            }
+            shell
+        });
+        cx.new(|cx| Root::new(shell, window, cx))
     });
 
     match opened {
-        // Recorded so the next click reaches this window instead of opening a
-        // second one beside it.
         Ok(handle) => {
-            state.update(cx, |state, _| state.panel = Some(handle.into()));
+            let handle: gpui_kit::AnyWindowHandle = handle.into();
+            if minimized {
+                let _ = handle.update(cx, |_, window, _| window.minimize_window());
+            }
+            tasks::start(&state, handle, cx);
         }
         Err(error) => {
             let error = crate::error::GuiError::Window {
                 detail: error.to_string(),
             };
-            tracing::error!(%error, "could not open the panel");
+            tracing::error!(%error, "could not open the window");
+            system::notify(&error.headline());
+            cx.quit();
         }
     }
 }
 
-/// Drives expiry and the battery safety release regardless of whether any
-/// window is open — the hold must end on time with the panel closed.
-fn start_supervisor(state: Entity<AppState>, cx: &mut App) {
-    cx.spawn(async move |cx| {
-        loop {
-            cx.background_executor()
-                .timer(config::SUPERVISION_INTERVAL)
-                .await;
-
-            // The process walk and the battery read are only worth paying for
-            // while someone is looking at them.
-            let visible = cx
-                .update(|cx| live_panel(&state, cx).is_some())
-                .unwrap_or(false);
-
-            let released = state.update(cx, |state, cx| {
-                if visible {
-                    state.refresh_readouts();
-                }
-                let released = state.tick();
-                // Unconditional, where this used to notify only on a release.
-                // The panel builds "45m left" from the clock at render time, so
-                // with nothing marking it dirty the countdown sat frozen at
-                // whatever it said the moment the panel opened.
-                cx.notify();
-                released
-            });
-
-            match released {
-                Ok(true) => {
-                    let _ = cx.update(|cx| {
-                        let _ =
-                            cx.show_notification(APP_NAME, "Session ended; normal sleep restored.");
-                    });
-                }
-                Ok(false) => {}
-                // The entity is gone, which means the app is shutting down.
-                Err(_) => break,
-            }
+/// The designed size, centred, shrunk to fit a display too small for it — the
+/// pages scroll rather than running off the screen.
+fn window_bounds(cx: &App) -> Bounds<gpui_kit::Pixels> {
+    let wanted: Size<gpui_kit::Pixels> = size(px(config::WINDOW_WIDTH), px(config::WINDOW_HEIGHT));
+    let fitted = match cx.primary_display() {
+        Some(display) => {
+            let room = display.bounds().size
+                - size(
+                    px(config::DISPLAY_MARGIN * 2.0),
+                    px(config::DISPLAY_MARGIN * 2.0),
+                );
+            size(wanted.width.min(room.width), wanted.height.min(room.height))
         }
-    })
-    .detach();
+        None => wanted,
+    };
+    Bounds::centered(None, fitted, cx)
 }
