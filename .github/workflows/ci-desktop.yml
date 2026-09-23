@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 # A push that supersedes an earlier one does not need the earlier one's matrix
-# finished: this is nine jobs across three operating systems.
+# finished: this is ten jobs across three operating systems.
 concurrency:
   group: ci-desktop-${{ github.ref }}
   cancel-in-progress: true
@@ -77,23 +77,38 @@ jobs:
         run: cargo run -p lid-cli -- systemd
 
   gui:
-    # Windows only: the tray app is not shipped on Linux, where stock GNOME
-    # has no tray and Wayland will not anchor a panel to one. macOS has its own
-    # AppKit app in `lid-macos`, covered by `ci.yml`.
-    runs-on: windows-latest
+    # The desktop app ships on Windows and Linux. macOS has its own AppKit
+    # app in `lid-macos`, covered by the menu-bar job below.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # gpui's Linux backend links fontconfig and freetype for text, and
+      # xkbcommon, Wayland and X11 for windows and input.
+      - name: Install the Linux GUI libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfontconfig-dev libfreetype-dev libwayland-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop
 
-      - name: Build and lint the tray app
+      - name: Build, test and lint the desktop app
         run: |
           cargo build -p lid-gui
+          cargo test -p lid-gui
           cargo clippy -p lid-gui --all-targets -- -D warnings
 
   menu-bar:
