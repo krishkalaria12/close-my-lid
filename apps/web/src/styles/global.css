@@ -62,7 +62,9 @@ img {
 .navInner,
 .hero,
 .how,
+.desktop,
 .agents,
+.download,
 .ctaInner,
 .footerInner {
   width: min(1200px, 100% - 3rem);
@@ -389,6 +391,176 @@ img {
 }
 
 
+/* ---- windows and linux app ---- */
+
+.desktop {
+  padding: clamp(3rem, 7vh, 5rem) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.signMark {
+  width: 14px;
+  height: 14px;
+}
+
+.desktopGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 9fr) minmax(0, 15fr);
+  gap: clamp(2rem, 4vw, 3.5rem);
+  align-items: center;
+}
+
+.desktopLede {
+  margin: 0;
+  font-size: clamp(1.05rem, 1.35vw, 1.2rem);
+  line-height: 1.5;
+  color: #333;
+}
+
+.desktopPoints {
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 2px solid var(--ink);
+}
+
+.desktopPoints li {
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-weight: 700;
+  font-size: 0.98rem;
+  letter-spacing: -0.01em;
+}
+
+.desktopNote {
+  margin: 1.25rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--mute);
+}
+
+.desktopShot {
+  min-width: 0;
+  margin: 0;
+}
+
+/* ---- download ---- */
+
+.download {
+  padding: clamp(3rem, 7vh, 5rem) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.platforms {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.platform {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.5rem;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+}
+
+/* The visitor's own platform, once the page has worked it out. */
+.platform.isYours {
+  box-shadow: 6px 6px 0 var(--ink);
+}
+
+.platformHead {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.platformIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+}
+
+.platformMark {
+  width: 20px;
+  height: 20px;
+}
+
+.platformName {
+  margin: 0;
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.platformApp {
+  margin: 0.1rem 0 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.platformMeta {
+  margin: 1.1rem 0 1.25rem;
+  font-size: 0.88rem;
+  color: var(--mute);
+}
+
+.platformButton {
+  justify-content: center;
+}
+
+.platformFile {
+  margin: 0.55rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--mute);
+  overflow-wrap: anywhere;
+}
+
+.platformOr {
+  margin: 1.4rem 0 0.55rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.platform .brew {
+  width: 100%;
+}
+
+.platformOpen {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--mute);
+}
+
+.downloadNote {
+  margin: 1.75rem 0 0;
+  font-size: 0.92rem;
+  color: var(--mute);
+}
+
+.downloadNote a {
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
 /* ---- faq ---- */
 
 .faq {
@@ -669,7 +841,9 @@ img {
 /* ---- responsive ---- */
 
 @media (max-width: 960px) {
-  .hero {
+  .hero,
+  .desktopGrid,
+  .platforms {
     grid-template-columns: minmax(0, 1fr);
   }
   .steps {
@@ -695,5 +869,10 @@ img {
     height: 100%;
     object-fit: cover;
     object-position: right center;
+  }
+
+  /* The desktop app reads from its sidebar outward, so keep the left edge. */
+  .shotLeft img {
+    object-position: left top;
   }
 }

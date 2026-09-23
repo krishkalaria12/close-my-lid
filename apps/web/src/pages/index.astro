@@ -1,13 +1,14 @@
 ---
 import { Image } from "astro:assets";
 import Base from "../layouts/Base.astro";
-import AppleMark from "../components/AppleMark.astro";
-import BrewCopy from "../components/BrewCopy.astro";
+import InstallCopy from "../components/InstallCopy.astro";
+import PlatformMark from "../components/PlatformMark.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import Faq from "../components/Faq.astro";
 import heroShot from "../assets/hero.png";
-import { site, agents, faqs } from "../data/site";
+import desktopShot from "../assets/desktop-app.png";
+import { site, mac, platforms, agents, faqs } from "../data/site";
 
 const LINE = {
   R: "var(--line-r)",
@@ -21,21 +22,29 @@ const STEPS = [
     n: "1",
     color: LINE.R,
     title: "Pick how long",
-    body: "30 minutes, 1 hour, 4 hours, or unlimited. The toggle remembers the duration you chose last, and the menu shows an exact end-of-session timer.",
+    body: "30 minutes, 1 hour, 4 hours, or unlimited. The app remembers the duration you chose last and shows exactly how long the hold has left.",
   },
   {
     n: "2",
     color: LINE.W,
-    title: "Approve once",
-    body: "A single admin prompt installs a scoped sudoers allowlist — exactly two pmset commands, no wildcards. Every hold after that is passwordless.",
+    title: "Start the hold",
+    body: "One click. Windows and Linux need no admin rights at all; on a Mac, a single prompt the first time sets up passwordless holds for good.",
   },
   {
     n: "3",
     color: LINE.P,
     title: "Close the lid",
-    body: "The Mac keeps running instead of sleeping. When the timer expires, the battery gets low, or you quit, normal sleep comes straight back.",
+    body: "The laptop keeps running instead of sleeping. When the timer expires, the battery gets low, or you quit, normal sleep comes straight back.",
   },
 ] as const;
+
+const DESKTOP_POINTS = [
+  "A live countdown and progress bar for timed holds",
+  "Battery level, and the 5% point where a hold ends on its own",
+  "Every running coding agent, and how many sessions each has open",
+  "Launch at login, notifications, and update checks in Settings",
+] as const;
+
 const stripTags = (html: string) => html.replace(/<[^>]+>/g, "");
 
 const schema = [
@@ -45,22 +54,22 @@ const schema = [
     name: site.name,
     applicationCategory: "DeveloperApplication",
     applicationSubCategory: "Power management",
-    operatingSystem: "macOS 14.0 or later",
-    processorRequirements: "Apple silicon",
+    operatingSystem: "macOS 14.0 or later, Windows 10, Windows 11, Linux",
     softwareVersion: site.version,
     url: site.url,
-    downloadUrl: site.download,
-    installUrl: site.download,
+    downloadUrl: platforms.map((platform) => platform.download),
+    installUrl: `${site.url}/#download`,
     softwareHelp: `${site.repo}#readme`,
     license: "https://opensource.org/licenses/MIT",
     isAccessibleForFree: true,
     image: `${site.url}/og-image.png`,
     description:
-      "A macOS menu bar app that keeps a Mac awake with the lid closed while coding agents, builds and downloads finish. Timed sessions, one passwordless admin grant, a dead-man watchdog and a low-battery release.",
+      "Keeps a laptop awake with the lid closed while coding agents, builds and downloads finish — a menu bar app on macOS and a desktop app on Windows and Linux. Timed sessions, a low-battery release, and live counts of running coding agents.",
     featureList: [
       "30 minute, 1 hour, 4 hour and unlimited lid-proof sessions",
-      "One admin prompt installs a scoped sudoers allowlist, then every hold is passwordless",
-      "Dead-man watchdog restores sleep if the app dies mid-hold",
+      "Native apps for macOS, Windows and Linux",
+      "No admin rights on Windows and Linux; one passwordless grant on macOS",
+      "Normal sleep restored if the app quits or crashes mid-hold",
       "Low-battery safety release at 5% on battery power",
       "Live session counts for seven coding agents",
       "CLI and Raycast commands sharing the same session state",
@@ -86,8 +95,8 @@ const schema = [
 ---
 
 <Base
-  title="Close My Lid — Keep your Mac awake with the lid closed"
-  description="A macOS menu bar app that keeps your Mac awake with the lid shut while coding agents, builds and downloads finish. Free and open source."
+  title="Close My Lid — Keep your laptop awake with the lid closed"
+  description="Keeps your laptop awake with the lid shut while coding agents, builds and downloads finish. Free and open source for macOS, Windows and Linux."
   schema={schema}
 >
   <SiteHeader home />
@@ -97,24 +106,40 @@ const schema = [
       <div>
         <h1 class="h1">Close the lid.<br />Keep working.</h1>
         <p class="lede">
-          Close My Lid keeps your Mac awake with the lid shut, so builds,
+          Close My Lid keeps your laptop awake with the lid shut, so builds,
           downloads and coding agents finish while the machine is in your bag.
-          One admin prompt, then it never asks again.
+          For macOS, Windows and Linux.
         </p>
         <div class="ctas">
-          <a href={site.download} class="primary">
-            <AppleMark />
-            Download for Mac — free
+          {
+            /* Rendered for the Mac; the script below re-points it at the
+               visitor's own platform. Without script it stays a working Mac
+               download, and every platform is one click away below. */
+          }
+          <a href={mac.download} class="primary" data-download>
+            {
+              platforms.map((platform) => (
+                <span data-mark={platform.id} hidden={platform.id !== "mac"}>
+                  <PlatformMark platform={platform.id} />
+                </span>
+              ))
+            }
+            <span data-download-label>Download for {mac.name} — free</span>
           </a>
-          <a href="#how" class="secondary">How it works ↓</a>
+          <a href="#download" class="secondary">All platforms ↓</a>
         </div>
-        <div style="margin-top:1.5rem">
-          <BrewCopy command={site.brewCask} />
+        <div style="margin-top:1.5rem" data-install>
+          <InstallCopy command={mac.install} label={mac.installLabel} />
         </div>
       </div>
 
       <figure class="heroShot">
-        <div class="shotFrame">
+        {
+          /* Both apps are in the page; the script shows the visitor the one
+             their platform gets. The Mac panel is the default for the same
+             reason the download button is. */
+        }
+        <div class="shotFrame" data-shot="mac">
           <Image
             src={heroShot}
             alt="The Close My Lid menu bar panel open on a Mac desktop: a hold toggle with its status line, a battery bar reading 11% left and stopping at 5%, live session counts for seven coding agents, and 30 minute, 1 hour, 4 hour and Unlimited hold presets."
@@ -123,6 +148,15 @@ const schema = [
             quality={82}
             loading="eager"
             fetchpriority="high"
+          />
+        </div>
+        <div class="shotFrame shotLeft" data-shot="desktop" hidden>
+          <Image
+            src={desktopShot}
+            alt="The Close My Lid desktop app for Windows and Linux: a sidebar with Overview, Agents and Settings, and an Overview page showing a one-hour hold with 59:49 remaining, a duration picker, a Stop Holding button, and cards for battery and running agents."
+            widths={[640, 960, 1280, 1880]}
+            sizes="(max-width: 960px) 92vw, 640px"
+            quality={82}
           />
         </div>
         <figcaption class="shotLegend">
@@ -138,7 +172,7 @@ const schema = [
             <span class="badge" style={`background:${LINE.P}`}>A</span>
             Agents
           </span>
-          <span class="legendNote">{site.minMacOS} · {site.arch}</span>
+          <span class="legendNote" data-shot-note>The macOS menu bar app</span>
         </figcaption>
       </figure>
     </section>
@@ -148,7 +182,7 @@ const schema = [
         <span class="signBadge" style={`background:${LINE.R}`}>1</span>
         <span class="signBadge" style={`background:${LINE.W}`}>2</span>
         <span class="signBadge" style={`background:${LINE.P}`}>3</span>
-        Three steps to a lid-proof Mac
+        Three steps to a lid-proof laptop
       </h2>
       <ol class="steps">
         {
@@ -169,6 +203,46 @@ const schema = [
       </ol>
     </section>
 
+    <section id="desktop" class="desktop">
+      <h2 class="sign">
+        <span class="signBadge" style={`background:${LINE.O}`}>
+          <PlatformMark platform="windows" class="signMark" />
+        </span>
+        <span class="signBadge" style={`background:${LINE.W}`}>
+          <PlatformMark platform="linux" class="signMark" />
+        </span>
+        A real app on Windows and Linux
+      </h2>
+      <div class="desktopGrid">
+        <div>
+          <p class="desktopLede">
+            Everything the Mac menu bar does, in a desktop window: start and
+            stop a hold, watch the battery, and see which agents are still
+            working — with no admin rights needed.
+          </p>
+          <ul class="desktopPoints">
+            {DESKTOP_POINTS.map((point) => <li>{point}</li>)}
+          </ul>
+          <p class="desktopNote">
+            Follows your system's light or dark appearance. Closing the window
+            always restores normal sleep.
+          </p>
+        </div>
+        <figure class="desktopShot">
+          <div class="shotFrame shotLeft">
+            <Image
+              src={desktopShot}
+              alt="The Close My Lid desktop app for Windows and Linux: a sidebar with Overview, Agents and Settings, and an Overview page showing a one-hour hold with 59:49 remaining, a duration picker, a Stop Holding button, and cards for battery and running agents."
+              widths={[640, 960, 1280, 1880]}
+              sizes="(max-width: 960px) 92vw, 680px"
+              quality={82}
+              loading="lazy"
+            />
+          </div>
+        </figure>
+      </div>
+    </section>
+
     <section id="agents" class="agents">
       <h2 class="sign">Agents we detect</h2>
       <ul class="agentList">
@@ -185,6 +259,40 @@ const schema = [
       </ul>
     </section>
 
+    <section id="download" class="download">
+      <h2 class="sign">Download — v{site.version}</h2>
+      <ul class="platforms">
+        {
+          platforms.map((platform) => (
+            <li class="platform" data-platform={platform.id}>
+              <div class="platformHead">
+                <span class="platformIcon" aria-hidden="true">
+                  <PlatformMark platform={platform.id} class="platformMark" />
+                </span>
+                <div>
+                  <h3 class="platformName">{platform.name}</h3>
+                  <p class="platformApp">{platform.app}</p>
+                </div>
+              </div>
+              <p class="platformMeta">{platform.requires}</p>
+              <a href={platform.download} class="primary platformButton">
+                Download
+              </a>
+              <p class="platformFile">{platform.file}</p>
+              <p class="platformOr">Or install from a terminal:</p>
+              <InstallCopy command={platform.install} label={platform.installLabel} />
+              <p class="platformOpen">{platform.open}</p>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="downloadNote">
+        Free and MIT licensed.
+        <a href={site.release}>Release notes</a> ·
+        <a href={`${site.repo}#readme`}>Install guide</a>
+      </p>
+    </section>
+
     <section id="faq" class="faq">
       <h2 class="sign">Questions</h2>
       <Faq />
@@ -193,13 +301,62 @@ const schema = [
     <section class="cta">
       <div class="ctaInner">
         <h2 class="ctaH">Your agents keep typing. Shut the lid.</h2>
-        <a href={site.download} class="primaryDark">
-          <AppleMark />
-          Download for Mac — free
-        </a>
+        <a href="#download" class="primaryDark">Download — free</a>
       </div>
     </section>
   </main>
 
   <SiteFooter />
 </Base>
+
+<script>
+  import { platforms, type PlatformId } from "../data/site";
+
+  // Point the hero at the visitor's own platform. The page ships pointing at
+  // the Mac, so a detection miss still leaves a working download.
+  const detect = (): PlatformId | null => {
+    const nav = navigator as Navigator & {
+      userAgentData?: { platform?: string };
+    };
+    const hint = `${nav.userAgentData?.platform ?? ""} ${navigator.userAgent}`;
+    if (/android|iphone|ipad|cros/i.test(hint)) return null;
+    if (/win/i.test(hint)) return "windows";
+    if (/linux|x11/i.test(hint)) return "linux";
+    if (/mac/i.test(hint)) return "mac";
+    return null;
+  };
+
+  const id = detect();
+  const platform = platforms.find((candidate) => candidate.id === id);
+  if (platform && platform.id !== "mac") {
+    const button = document.querySelector<HTMLAnchorElement>("[data-download]");
+    if (button) {
+      button.href = platform.download;
+      const label = button.querySelector("[data-download-label]");
+      if (label) label.textContent = `Download for ${platform.name} — free`;
+      for (const mark of button.querySelectorAll<HTMLElement>("[data-mark]")) {
+        mark.hidden = mark.dataset.mark !== platform.id;
+      }
+    }
+
+    for (const shot of document.querySelectorAll<HTMLElement>("[data-shot]")) {
+      shot.hidden = shot.dataset.shot !== "desktop";
+    }
+    const note = document.querySelector("[data-shot-note]");
+    if (note) note.textContent = "The Windows and Linux app";
+
+    const copy = document.querySelector<HTMLButtonElement>("[data-install] [data-brew]");
+    if (copy) {
+      copy.dataset.brew = platform.install;
+      copy.setAttribute("aria-label", platform.installLabel);
+      const text = copy.querySelector("[data-brew-cmd]");
+      if (text) text.textContent = platform.install;
+    }
+  }
+
+  if (platform) {
+    document
+      .querySelector(`[data-platform="${platform.id}"]`)
+      ?.classList.add("isYours");
+  }
+</script>

@@ -1,19 +1,21 @@
 ---
 interface Props {
   command: string;
+  /** Read by screen readers, e.g. "Copy the Homebrew install command". */
+  label: string;
 }
 
-const { command } = Astro.props;
+const { command, label } = Astro.props;
 ---
 
 <button
   type="button"
   class="brew"
   data-brew={command}
-  aria-label="Copy the Homebrew install command"
+  aria-label={label}
 >
   <span aria-hidden="true">$</span>
-  <span class="brewCmd">{command}</span>
+  <span class="brewCmd" data-brew-cmd>{command}</span>
   <span class="brewState" data-brew-state aria-hidden="true">COPY</span>
 </button>
 <span class="sr-only" role="status" data-brew-status></span>

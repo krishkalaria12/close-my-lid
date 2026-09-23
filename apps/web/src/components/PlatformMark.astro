@@ -1,0 +1,44 @@
+---
+import AppleMark from "./AppleMark.astro";
+import type { PlatformId } from "../data/site";
+
+interface Props {
+  platform: PlatformId;
+  class?: string;
+}
+
+const { platform, class: className = "h-4 w-4" } = Astro.props;
+---
+
+{platform === "mac" && <AppleMark class={className} />}
+{
+  platform === "windows" && (
+    <svg
+      class={className}
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M0 2.2 6.5 1.3v6.2H0V2.2Zm7.3-1 8.7-1.2v7.5H7.3V1.2ZM0 8.5h6.5v6.2L0 13.8V8.5Zm7.3 0H16V16l-8.7-1.2V8.5Z" />
+    </svg>
+  )
+}
+{
+  platform === "linux" && (
+    <svg
+      class={className}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="1" y="2" width="14" height="12" rx="1.5" />
+      <path d="m4 6 2.5 2L4 10M8.5 10.5H12" />
+    </svg>
+  )
+}

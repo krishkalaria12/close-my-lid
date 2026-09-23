@@ -22,7 +22,7 @@ const schema = [
 
 <Base
   title="Privacy — Close My Lid"
-  description="What Close My Lid collects, and what it never touches. No account, no telemetry, no server: the app flips one documented macOS power setting and nothing else."
+  description="What Close My Lid collects, and what it never touches. No account, no telemetry, no server: the app changes one documented power setting and nothing else."
   schema={schema}
 >
   <SiteHeader />
@@ -35,8 +35,8 @@ const schema = [
     <h1 class="proseTitle">Privacy</h1>
 
     <p>
-      Close My Lid is a free, MIT-licensed macOS menu bar app. It has no
-      account, no server, and nothing to sign in to. This page explains what the
+      Close My Lid is a free, MIT-licensed app for macOS, Windows and Linux.
+      It has no account, no server, and nothing to sign in to. This page explains what the
       app and this website touch, and what they never do.
     </p>
 
@@ -48,8 +48,8 @@ const schema = [
         ships no third-party SDKs.
       </li>
       <li>
-        Nothing about your work leaves your Mac. Your session state lives in
-        local preferences.
+        Nothing about your work leaves your computer. Your session state lives
+        in local files.
       </li>
       <li>
         The only network request the app makes is an update check against this
@@ -60,9 +60,9 @@ const schema = [
       </li>
     </ul>
 
-    <h2>The app</h2>
+    <h2>How the lid is held</h2>
     <p>
-      Close My Lid holds a Mac awake with the lid shut by setting <code
+      On macOS, Close My Lid holds a Mac awake with the lid shut by setting <code
         >pmset -a disablesleep 1</code
       >, and restores normal sleep with <code>pmset -a disablesleep 0</code>.
       Those two commands are the only privileged thing it does. They are
@@ -71,7 +71,14 @@ const schema = [
       remove at any time from Settings › Administrator Access.
     </p>
     <p>
-      The app asks macOS for no special permissions. There is no Accessibility,
+      On Linux it takes a logind <code>handle-lid-switch</code> inhibitor over
+      the system bus, which needs no root and is released the moment the app
+      exits. On Windows it sets the active power plan's lid-close action to Do
+      nothing for the length of the hold, saving your own setting first and
+      putting it back afterwards. Neither asks for administrator rights.
+    </p>
+    <p>
+      The app asks for no special permissions on any platform. There is no Accessibility,
       no Input Monitoring, no Screen Recording, and no keystroke watching. It
       does not read your source code, your prompts, your agent output, your
       terminal history, or your files.
@@ -79,33 +86,40 @@ const schema = [
 
     <h2>Agent detection</h2>
     <p>
-      The menu panel shows how many sessions of each supported coding agent are
-      running. To do that it snapshots your own processes with a single
-      <code>sysctl(KERN_PROC_UID)</code> call — it does not spawn <code>ps</code
-      > or <code>pgrep</code>, and it cannot see other users' processes. It
-      matches executable names, and for installs that run under a JavaScript
-      runtime it reads the process arguments to find the install-directory path.
+      The app shows how many sessions of each supported coding agent are
+      running. To do that it reads the list of running processes — on a Mac,
+      your own processes through a single <code>sysctl(KERN_PROC_UID)</code>
+      call; on Windows and Linux, the process list the system exposes to any
+      app. It does not spawn <code>ps</code> or <code>pgrep</code>. It matches
+      executable names, and for installs that run under a JavaScript runtime it
+      reads the process arguments to find the install-directory path.
     </p>
     <p>
-      Those counts are computed on your Mac, displayed in the panel, and thrown
-      away. They are never stored, never logged, and never transmitted.
+      Those counts are computed on your computer, displayed in the app, and
+      thrown away. They are never stored, never logged, and never transmitted.
     </p>
 
-    <h2>What is stored on your Mac</h2>
+    <h2>What is stored on your computer</h2>
     <p>
       The app keeps your current session — the duration you picked and when it
-      ends — plus your Launch at Login preference, in local user preferences. A
-      heartbeat file lets the watchdog LaunchAgent release a stranded hold if
-      the app dies. All of it stays on the machine, and uninstalling removes it.
+      ends — and a few preferences, such as whether to show notifications, in
+      its own folder in your user profile. On a Mac, a heartbeat file lets the
+      watchdog LaunchAgent release a stranded hold if the app dies; on Windows,
+      the lid setting it replaced is saved so it can be restored. Launch at
+      login, when you turn it on, is a login item on macOS, a Run entry in your
+      user registry on Windows, and an autostart entry on Linux. All of it
+      stays on the machine.
     </p>
 
     <h2>Updates</h2>
     <p>
-      The app checks for updates through Sparkle against a signed appcast served
-      from this project's GitHub repository. That request carries your current
-      app version and the ordinary network metadata any HTTP request carries,
-      such as your IP address, which GitHub receives as the host. It does not
-      carry an identifier for you, and there is no telemetry attached to it.
+      The app checks for updates by reading this project's release feed, a file
+      served from its GitHub repository. It compares the newest version there
+      with its own, and if there is a newer one it offers to open the release
+      page — it never downloads or installs anything itself. That request
+      carries the ordinary network metadata any HTTP request carries, such as
+      your IP address, which GitHub receives as the host. It does not carry an
+      identifier for you, and there is no telemetry attached to it.
     </p>
 
     <h2>This website</h2>
