@@ -24,17 +24,14 @@ pub mod heartbeat;
 #[cfg(target_os = "macos")]
 pub mod launchd;
 pub mod lock;
-#[cfg(target_os = "macos")]
 pub mod notify;
 pub mod power;
-#[cfg(target_os = "macos")]
 pub mod prefs;
 pub mod session;
 pub mod state;
 pub mod store;
 #[cfg(target_os = "macos")]
 pub mod sudoers;
-#[cfg(target_os = "macos")]
 pub mod updates;
 
 pub use agents::{AgentHarness, RunningProcess, session_counts, sessions_now};
@@ -47,7 +44,6 @@ pub use heartbeat::{HoldHeartbeat, HoldHeartbeatStore, WatchdogPolicy, run_once 
 #[cfg(target_os = "macos")]
 pub use launchd::WATCHDOG_ARG;
 pub use lock::HoldLock;
-#[cfg(target_os = "macos")]
 pub use notify::{SessionNotificationPlan, plan as notification_plan};
 pub use power::{LidPowerBackend, backend, backend_readonly};
 pub use session::SleepSessionController;

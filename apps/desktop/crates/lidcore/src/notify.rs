@@ -10,6 +10,13 @@ use chrono::{DateTime, Duration, Utc};
 use crate::config::APP_NAME;
 use crate::duration::SessionDuration;
 
+/// What the copy calls the machine. "Mac" is what people call theirs; on the
+/// other platforms the closed lid is the one thing every target has in common.
+#[cfg(target_os = "macos")]
+const MACHINE: &str = "Mac";
+#[cfg(not(target_os = "macos"))]
+const MACHINE: &str = "laptop";
+
 /// How far ahead of the end the "ending soon" warning fires.
 pub const ENDING_SOON_LEAD: Duration = Duration::minutes(5);
 
@@ -55,7 +62,7 @@ pub fn plan(duration: SessionDuration, started_at: DateTime<Utc>) -> SessionNoti
         ended: Some(ScheduledNotification {
             fire_at: ends_at,
             title: APP_NAME.to_string(),
-            body: "Your Mac now sleeps normally when the lid is closed.".to_string(),
+            body: format!("Your {MACHINE} now sleeps normally when the lid is closed."),
         }),
     }
 }
@@ -63,10 +70,10 @@ pub fn plan(duration: SessionDuration, started_at: DateTime<Utc>) -> SessionNoti
 fn start_body(duration: SessionDuration) -> String {
     match duration {
         SessionDuration::Indefinite => {
-            "Your Mac will stay awake with the lid closed until you stop it.".to_string()
+            format!("Your {MACHINE} will stay awake with the lid closed until you stop it.")
         }
         SessionDuration::Timed { .. } => format!(
-            "Your Mac will stay awake with the lid closed for the next {}.",
+            "Your {MACHINE} will stay awake with the lid closed for the next {}.",
             duration.label().to_lowercase()
         ),
     }
@@ -79,8 +86,9 @@ fn ending_soon(started_at: DateTime<Utc>, ends_at: DateTime<Utc>) -> Option<Sche
     (fire_at > started_at).then(|| ScheduledNotification {
         fire_at,
         title: APP_NAME.to_string(),
-        body: "About 5 minutes left before your Mac sleeps normally with the lid closed."
-            .to_string(),
+        body: format!(
+            "About 5 minutes left before your {MACHINE} sleeps normally with the lid closed."
+        ),
     })
 }
 
