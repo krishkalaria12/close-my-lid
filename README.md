@@ -14,9 +14,9 @@ or use the one-line installer below it.
 
 | System | App | Download |
 |---|---|---|
-| macOS 14+ (Apple silicon and Intel) | Menu bar app, which is also the `close-my-lid` command | [Close-My-Lid-v0.6.0-macOS.zip](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.0/Close-My-Lid-v0.6.0-macOS.zip) |
-| Windows 10/11 (x64) | Desktop app and `close-my-lid` CLI | [Close-My-Lid-v0.6.0-windows-x86_64.zip](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.0/Close-My-Lid-v0.6.0-windows-x86_64.zip) |
-| Linux (x86_64) | Desktop app and `close-my-lid` CLI | [close-my-lid-v0.6.0-linux-x86_64.tar.gz](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.0/close-my-lid-v0.6.0-linux-x86_64.tar.gz) |
+| macOS 14+ (Apple silicon and Intel) | Menu bar app, which is also the `close-my-lid` command | [Close-My-Lid-v0.6.1-macOS.zip](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.1/Close-My-Lid-v0.6.1-macOS.zip) |
+| Windows 10/11 (x64) | Desktop app and `close-my-lid` CLI | [Close-My-Lid-v0.6.1-windows-x86_64.zip](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.1/Close-My-Lid-v0.6.1-windows-x86_64.zip) |
+| Linux (x86_64) | Desktop app and `close-my-lid` CLI | [close-my-lid-v0.6.1-linux-x86_64.tar.gz](https://github.com/krishkalaria12/close-my-lid/releases/download/v0.6.1/close-my-lid-v0.6.1-linux-x86_64.tar.gz) |
 
 Quickest install, one line per platform:
 
@@ -154,7 +154,7 @@ change that:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `CLOSE_MY_LID_VERSION` | latest | Release to install, e.g. `v0.6.0` |
+| `CLOSE_MY_LID_VERSION` | latest | Release to install, e.g. `v0.6.1` |
 | `CLOSE_MY_LID_BIN_DIR` | `~/.local/bin` | macOS/Linux: where `close-my-lid` goes |
 | `CLOSE_MY_LID_APP_DIR` | `/Applications` | macOS: where the app goes |
 | `CLOSE_MY_LID_INSTALL_DIR` | `%LOCALAPPDATA%\Programs\CloseMyLid` | Windows: install folder |
@@ -162,7 +162,7 @@ change that:
 For example:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | CLOSE_MY_LID_VERSION=v0.6.0 sh
+curl -fsSL https://raw.githubusercontent.com/krishkalaria12/close-my-lid/main/scripts/install.sh | CLOSE_MY_LID_VERSION=v0.6.1 sh
 ```
 
 Re-running a script upgrades in place.
