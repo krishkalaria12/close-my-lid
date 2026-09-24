@@ -189,6 +189,20 @@ impl App {
         }
     }
 
+    /// Closes the panel after it loses key status, unless the click that took
+    /// it was on the status item: the button's own toggle closes it then.
+    pub fn dismiss_panel(self: &Rc<Self>) {
+        if self
+            .panel
+            .borrow()
+            .as_ref()
+            .is_some_and(Panel::pointer_over_status_button)
+        {
+            return;
+        }
+        self.close_panel();
+    }
+
     /// Re-reads the panel's readouts. Called by its own ticker while open.
     pub fn refresh_panel_readouts(self: &Rc<Self>) {
         self.controller.borrow_mut().refresh_readouts();

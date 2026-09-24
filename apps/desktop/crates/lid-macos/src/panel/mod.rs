@@ -143,7 +143,7 @@ define_class!(
         fn window_did_resign_key(&self, _notification: &NSNotification) {
             let app = self.ivars().app.borrow().clone();
             if let Some(app) = app {
-                app.close_panel();
+                app.dismiss_panel();
             }
         }
     }
@@ -201,6 +201,21 @@ impl Panel {
 
     pub fn is_visible(&self) -> bool {
         self.window.isVisible()
+    }
+
+    /// Whether the pointer is over the status item. A click there takes key
+    /// status from the panel on mouse-down, before the button's toggle runs on
+    /// mouse-up; closing at that point would let the toggle reopen the panel.
+    pub fn pointer_over_status_button(&self) -> bool {
+        let button = self.status_button.borrow();
+        let Some(frame) = button.as_deref().and_then(screen_frame) else {
+            return false;
+        };
+        let point = NSEvent::mouseLocation();
+        point.x >= frame.min().x
+            && point.x <= frame.max().x
+            && point.y >= frame.min().y
+            && point.y <= frame.max().y
     }
 
     /// The panel's current height. Reported in debug logs, where it is the
@@ -519,11 +534,9 @@ fn session_detail(count: usize) -> String {
 /// Where the panel's bottom-left corner goes: centred under the status item,
 /// then nudged back inside the screen's visible area.
 fn anchor_origin(button: &NSStatusBarButton, size: NSSize, mtm: MainThreadMarker) -> NSPoint {
-    let Some(window) = button.window() else {
+    let (Some(window), Some(frame)) = (button.window(), screen_frame(button)) else {
         return NSPoint::new(0.0, 0.0);
     };
-    let in_window = button.convertRect_toView(button.bounds(), None);
-    let frame = window.convertRectToScreen(in_window);
 
     let origin = NSPoint::new(
         frame.mid().x - size.width / 2.0,
@@ -534,6 +547,13 @@ fn anchor_origin(button: &NSStatusBarButton, size: NSSize, mtm: MainThreadMarker
         Some(screen) => clamped_origin(origin, size, screen.visibleFrame()),
         None => origin,
     }
+}
+
+/// The status item's button in screen coordinates.
+fn screen_frame(button: &NSStatusBarButton) -> Option<NSRect> {
+    let window = button.window()?;
+    let in_window = button.convertRect_toView(button.bounds(), None);
+    Some(window.convertRectToScreen(in_window))
 }
 
 /// Nudges an origin back inside a screen's visible area.
